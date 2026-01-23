@@ -1,0 +1,72 @@
+{
+  "created_at": "2026-01-23T10:35:04.467297+00:00",
+  "model_name": "mock_model",
+  "inputs": {
+    "prompts": "stage3/data/eval/prompts_eval_300.jsonl",
+    "gen_pass1": "stage3/data/eval/generations/mock_model/gen_pass1.jsonl",
+    "gen_pass8": "stage3/data/eval/generations/mock_model/gen_pass8.jsonl"
+  },
+  "validator": {
+    "validator_cli": "stage0/validator/src/cli.js",
+    "api_index": "stage0/data/api_index/phaser_api.jsonl",
+    "timeout_ms": 1500,
+    "frames": 60,
+    "skip_eslint": false,
+    "skip_runtime": true
+  },
+  "gating": {
+    "structure_keys": [
+      "has_new_phaser_game",
+      "has_scene_in_config",
+      "has_preload",
+      "has_create"
+    ],
+    "lint_in_gate": true,
+    "runtime_in_gate": false,
+    "unsafe_codes": [
+      "banned_import",
+      "banned_import_decl",
+      "banned_require",
+      "eval",
+      "new_function"
+    ]
+  },
+  "prompt_stats": {
+    "total": 30
+  },
+  "metrics": {
+    "pass_at_1": 0.5,
+    "pass_at_8": 0.8333333333333334,
+    "pass1": {
+      "n_prompts": 30,
+      "pass_at_1": 0.5,
+      "pass_at_8": 0.8333333333333334,
+      "parse_rate": 1.0,
+      "lint_rate": 0.8666666666666667,
+      "api_ok_rate": 0.7,
+      "must_use_full_rate": 0.8666666666666667,
+      "api_accuracy_mean": 0.9715873015873017,
+      "structure_rate": 0.9333333333333333,
+      "runtime_ok_rate": 1.0,
+      "crash_rate": 0.0
+    },
+    "pass8_samples": {
+      "n_samples": 240,
+      "sample_pass_rate": 0.45,
+      "parse_rate": 0.9041666666666667,
+      "lint_rate": 0.7791666666666667,
+      "api_ok_rate": 0.6416666666666667,
+      "must_use_full_rate": 0.7625,
+      "api_accuracy_mean": 0.8821130952380956,
+      "structure_rate": 0.8125,
+      "runtime_ok_rate": 1.0,
+      "crash_rate": 0.0
+    }
+  },
+  "outputs": {
+    "results_pass1": "stage3/data/eval/reports/mock_model/results_pass1.jsonl",
+    "results_pass8": "stage3/data/eval/reports/mock_model/results_pass8.jsonl",
+    "breakdown_csv": "stage3/data/eval/reports/mock_model/breakdown.csv",
+    "failures_topn": "stage3/data/eval/reports/mock_model/failures_topn.json"
+  }
+}

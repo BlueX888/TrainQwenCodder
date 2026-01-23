@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-01-23T10:34:54.291251+00:00",
+  "seed": 42,
+  "prompt_seeds": "stage0/data/prompt_seeds/prompt_seeds.jsonl",
+  "eval_out": "stage3/data/eval/prompts_eval_300.jsonl",
+  "human_out": "stage3/data/eval/prompts_human_200.jsonl",
+  "eval_requested": 30,
+  "human_requested": 10,
+  "eval_written": 30,
+  "human_written": 10,
+  "ood_ratio_target": 0.2,
+  "eval_summary": {
+    "total": 30,
+    "by_difficulty": {
+      "easy": 10,
+      "medium": 14,
+      "hard": 6
+    },
+    "by_ood": {
+      "iid": 24,
+      "ood": 6
+    },
+    "by_primary_module": {
+      "Scene": 30
+    }
+  },
+  "human_summary": {
+    "total": 10,
+    "by_difficulty": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 2
+    },
+    "by_ood": {
+      "iid": 8,
+      "ood": 2
+    },
+    "by_primary_module": {
+      "Scene": 10
+    }
+  }
+}

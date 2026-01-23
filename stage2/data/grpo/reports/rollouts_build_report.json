@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-01-23T10:15:03.401589+00:00",
+  "step": 0,
+  "prompts": 5,
+  "rows": 20,
+  "group_size": 4,
+  "skip_eslint": false,
+  "skip_runtime": true
+}

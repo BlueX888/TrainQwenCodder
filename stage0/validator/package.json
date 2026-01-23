@@ -1,0 +1,21 @@
+{
+  "name": "trainqwen-phaser-validator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/cli.js",
+  "scripts": {
+    "validate": "node src/cli.js"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "eslint": "^9.0.0",
+    "phaser": "^3.80.0"
+  },
+  "optionalDependencies": {
+    "canvas": "^2.11.2",
+    "jsdom": "^24.0.0"
+  }
+}
+

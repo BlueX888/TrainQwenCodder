@@ -1,0 +1,9 @@
+module,easy,medium,hard,total
+Animations,6,2,0,8
+Camera,3,2,0,5
+GameObjects,13,6,5,24
+Input,15,16,3,34
+Particles,2,0,0,2
+Physics,0,22,10,32
+Scene,24,24,12,60
+Tilemap,0,2,0,2

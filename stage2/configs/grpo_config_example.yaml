@@ -1,0 +1,33 @@
+# GRPO config (example)
+model_name_or_path: /path/to/sft_model
+ref_model_name_or_path: /path/to/sft_model  # or a frozen copy
+
+prompts_train: stage2/data/grpo/prompts_train.jsonl
+prompts_eval: stage2/data/grpo/prompts_eval.jsonl
+
+group_size: 8
+batch_prompts_per_step: 16
+max_new_tokens: 1800
+temperature: 0.7
+top_p: 0.9
+seed: 42
+
+# Reward
+reward_version: v0.1.0
+reward_plan_weight: 0.15
+reward_code_weight: 0.85
+runtime_crash_cap: 0.2
+validator_cli: stage0/validator/src/cli.js
+api_index: stage0/data/api_index/phaser_api.jsonl
+timeout_ms: 1500
+frames: 60
+skip_eslint: false
+skip_runtime: true
+
+# KL control
+target_kl: 0.10
+beta_init: 0.05
+beta_min: 0.005
+beta_max: 0.5
+beta_mul: 1.5
+

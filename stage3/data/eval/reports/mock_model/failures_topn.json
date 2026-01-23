@@ -1,0 +1,1244 @@
+{
+  "pass1": {
+    "counts": {
+      "api_miss": 5,
+      "must_use_miss": 4,
+      "lint_failed": 4,
+      "structure_missing": 2
+    },
+    "examples": {
+      "api_miss": [
+        {
+          "prompt_id": "eval_000017",
+          "sample_id": 0,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个基于数组数据的简单 Tilemap：用 0/1 数组生成网格地图（1 为墙可碰撞），玩家用方向键移动且不能穿墙。"
+              ],
+              "apis": [
+                "Phaser.Tilemaps.Tilemap",
+                "Phaser.Physics.Arcade.Sprite"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000020",
+          "sample_id": 0,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个简易平台跳跃：角色可左右移动与跳跃，重力为 500，并与地面碰撞不穿透。"
+              ],
+              "apis": [
+                "Phaser.Physics.Arcade.Sprite",
+                "Phaser.Input.Keyboard.KeyCodes"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000021",
+          "sample_id": 0,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": null,
+            "quality": "good"
+          }
+        },
+        {
+          "prompt_id": "eval_000024",
+          "sample_id": 0,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现对象池 + 压力测试：持续生成/回收一定数量的子弹或粒子对象，要求使用对象池避免无限增长，并输出当前活动对象数量。"
+              ],
+              "apis": [
+                "Phaser.Physics.Arcade.Group",
+                "Phaser.GameObjects.Text"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000026",
+          "sample_id": 0,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "组合任务：实现一个粒子跟随效果：指针移动时在指针位置发射粒子拖尾（不得依赖外部贴图，需程序化生成一个小纹理）。 同时，实现确定性生成：基于 seed=3181 生成一批障碍物布局，要求相同 seed 下布局一致，并能在 UI 显示当前 seed。（要求：输出可验证的 signals，例如 window.__signals__ 或日志 JSON）。要求在同一个 Scene 内实现。"
+              ],
+              "apis": [
+                "Phaser.GameObjects.Particles.ParticleEmitterManager",
+                "Phaser.Input.Events.POINTER_MOVE",
+                "Phaser.Math.RND",
+                "Phaser.GameObjects.Text"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "api_miss"
+          }
+        }
+      ],
+      "must_use_miss": [
+        {
+          "prompt_id": "eval_000002",
+          "sample_id": 0,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个青色六边形在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "must_use_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000005",
+          "sample_id": 0,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成方块的功能：每次点击生成一个随机颜色的方块，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "runtime_crash"
+          }
+        },
+        {
+          "prompt_id": "eval_000006",
+          "sample_id": 0,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成三角形的功能：每次点击生成一个随机颜色的三角形，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "good"
+          }
+        },
+        {
+          "prompt_id": "eval_000027",
+          "sample_id": 0,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "组合任务：实现点击画面生成方块的功能：每次点击生成一个随机颜色的方块，并在屏幕边界内随机初始位置。（不得使用外部图片资源） 同时，实现一个发射子弹的例子：按空格发射子弹（对象池复用），子弹速度 200，离开边界回收。（要求：不要使用外部图片资源，尽量用 Graphics 或纯色纹理）。要求在同一个 Scene 内实现。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics",
+                "Phaser.Physics.Arcade.Group",
+                "Phaser.Input.Keyboard.KeyCodes"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "good"
+          }
+        }
+      ],
+      "lint_failed": [
+        {
+          "prompt_id": "eval_000007",
+          "sample_id": 0,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个可拖拽的蓝色六边形，拖拽时改变颜色，松手后回到初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.GAMEOBJECT_DRAG",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000010",
+          "sample_id": 0,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个紫色六边形在 2 秒内从左移动到右，然后往返循环。"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000013",
+          "sample_id": 0,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": null,
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000025",
+          "sample_id": 0,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "组合任务：实现一个带关卡的收集玩法：共 3 关，每关收集完物品后进入下一关，显示 level 与 score。 同时，实现一个发射子弹的例子：按空格发射子弹（对象池复用），子弹速度 200，离开边界回收。（要求：不要使用外部图片资源，尽量用 Graphics 或纯色纹理）。要求在同一个 Scene 内实现。"
+              ],
+              "apis": [
+                "Phaser.Physics.Arcade.Group",
+                "Phaser.GameObjects.Text",
+                "Phaser.Input.Keyboard.KeyCodes"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "lint_fail"
+          }
+        }
+      ],
+      "structure_missing": [
+        {
+          "prompt_id": "eval_000004",
+          "sample_id": 0,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个黄色方块在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "missing_game"
+          }
+        },
+        {
+          "prompt_id": "eval_000029",
+          "sample_id": 0,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": null,
+            "quality": "missing_game"
+          }
+        }
+      ]
+    }
+  },
+  "pass8_samples": {
+    "counts": {
+      "must_use_miss": 31,
+      "api_miss": 27,
+      "parse_failed": 23,
+      "structure_missing": 21,
+      "lint_failed": 18,
+      "unsafe_code": 12
+    },
+    "examples": {
+      "must_use_miss": [
+        {
+          "prompt_id": "eval_000002",
+          "sample_id": 0,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个青色六边形在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "must_use_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000003",
+          "sample_id": 1,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个紫色方块在 2 秒内从左移动到右，然后往返循环。"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=1"
+            },
+            "quality": "must_use_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000005",
+          "sample_id": 0,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成方块的功能：每次点击生成一个随机颜色的方块，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "runtime_crash"
+          }
+        },
+        {
+          "prompt_id": "eval_000005",
+          "sample_id": 1,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": null,
+            "quality": "good"
+          }
+        },
+        {
+          "prompt_id": "eval_000005",
+          "sample_id": 2,
+          "reason": "must_use_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成方块的功能：每次点击生成一个随机颜色的方块，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=2"
+            },
+            "quality": "good"
+          }
+        }
+      ],
+      "api_miss": [
+        {
+          "prompt_id": "eval_000001",
+          "sample_id": 7,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现相机跟随：让一个自动水平移动的方块在场景中移动，相机跟随该对象并保持居中。"
+              ],
+              "apis": [
+                "Phaser.Cameras.Scene2D.Camera",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=7"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000002",
+          "sample_id": 3,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个青色六边形在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000002",
+          "sample_id": 6,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个青色六边形在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=6"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000003",
+          "sample_id": 6,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个紫色方块在 2 秒内从左移动到右，然后往返循环。"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=6"
+            },
+            "quality": "api_miss"
+          }
+        },
+        {
+          "prompt_id": "eval_000007",
+          "sample_id": 5,
+          "reason": "api_miss",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个可拖拽的蓝色六边形，拖拽时改变颜色，松手后回到初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.GAMEOBJECT_DRAG",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=5"
+            },
+            "quality": "api_miss"
+          }
+        }
+      ],
+      "parse_failed": [
+        {
+          "prompt_id": "eval_000004",
+          "sample_id": 2,
+          "reason": "parse_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个黄色方块在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=2"
+            },
+            "quality": "missing_scene"
+          }
+        },
+        {
+          "prompt_id": "eval_000006",
+          "sample_id": 6,
+          "reason": "parse_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成三角形的功能：每次点击生成一个随机颜色的三角形，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=6"
+            },
+            "quality": "missing_scene"
+          }
+        },
+        {
+          "prompt_id": "eval_000009",
+          "sample_id": 2,
+          "reason": "parse_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现相机跟随：让一个自动水平移动的圆形在场景中移动，相机跟随该对象并保持居中。"
+              ],
+              "apis": [
+                "Phaser.Cameras.Scene2D.Camera",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=2"
+            },
+            "quality": "parse_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000009",
+          "sample_id": 6,
+          "reason": "parse_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现相机跟随：让一个自动水平移动的圆形在场景中移动，相机跟随该对象并保持居中。"
+              ],
+              "apis": [
+                "Phaser.Cameras.Scene2D.Camera",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=6"
+            },
+            "quality": "missing_scene"
+          }
+        },
+        {
+          "prompt_id": "eval_000013",
+          "sample_id": 1,
+          "reason": "parse_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个发射子弹的例子：按空格发射子弹（对象池复用），子弹速度 160，离开边界回收。"
+              ],
+              "apis": [
+                "Phaser.Physics.Arcade.Group",
+                "Phaser.Input.Keyboard.KeyCodes"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=1"
+            },
+            "quality": "missing_scene"
+          }
+        }
+      ],
+      "structure_missing": [
+        {
+          "prompt_id": "eval_000003",
+          "sample_id": 2,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个紫色方块在 2 秒内从左移动到右，然后往返循环。"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=2"
+            },
+            "quality": "missing_game"
+          }
+        },
+        {
+          "prompt_id": "eval_000004",
+          "sample_id": 0,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个黄色方块在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "missing_game"
+          }
+        },
+        {
+          "prompt_id": "eval_000004",
+          "sample_id": 3,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个黄色方块在 2 秒内从左移动到右，然后往返循环。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "missing_game"
+          }
+        },
+        {
+          "prompt_id": "eval_000007",
+          "sample_id": 6,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个可拖拽的蓝色六边形，拖拽时改变颜色，松手后回到初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.GAMEOBJECT_DRAG",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=6"
+            },
+            "quality": "missing_game"
+          }
+        },
+        {
+          "prompt_id": "eval_000009",
+          "sample_id": 4,
+          "reason": "structure_missing",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": null,
+            "quality": "missing_game"
+          }
+        }
+      ],
+      "lint_failed": [
+        {
+          "prompt_id": "eval_000003",
+          "sample_id": 3,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个补间动画：让一个紫色方块在 2 秒内从左移动到右，然后往返循环。"
+              ],
+              "apis": [
+                "Phaser.Tweens.Tween",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000005",
+          "sample_id": 3,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成方块的功能：每次点击生成一个随机颜色的方块，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000006",
+          "sample_id": 3,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现点击画面生成三角形的功能：每次点击生成一个随机颜色的三角形，并在屏幕边界内随机初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.POINTER_DOWN",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000007",
+          "sample_id": 0,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个可拖拽的蓝色六边形，拖拽时改变颜色，松手后回到初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.GAMEOBJECT_DRAG",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=0"
+            },
+            "quality": "lint_fail"
+          }
+        },
+        {
+          "prompt_id": "eval_000008",
+          "sample_id": 7,
+          "reason": "lint_failed",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个粒子跟随效果：指针移动时在指针位置发射粒子拖尾（不得依赖外部贴图，需程序化生成一个小纹理）。（不得使用外部图片资源）"
+              ],
+              "apis": [
+                "Phaser.GameObjects.Particles.ParticleEmitterManager",
+                "Phaser.Input.Events.POINTER_MOVE"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=7"
+            },
+            "quality": "lint_fail"
+          }
+        }
+      ],
+      "unsafe_code": [
+        {
+          "prompt_id": "eval_000001",
+          "sample_id": 3,
+          "reason": "unsafe_code",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现相机跟随：让一个自动水平移动的方块在场景中移动，相机跟随该对象并保持居中。"
+              ],
+              "apis": [
+                "Phaser.Cameras.Scene2D.Camera",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "unsafe"
+          }
+        },
+        {
+          "prompt_id": "eval_000007",
+          "sample_id": 3,
+          "reason": "unsafe_code",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个可拖拽的蓝色六边形，拖拽时改变颜色，松手后回到初始位置。"
+              ],
+              "apis": [
+                "Phaser.Input.Events.GAMEOBJECT_DRAG",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=3"
+            },
+            "quality": "unsafe"
+          }
+        },
+        {
+          "prompt_id": "eval_000009",
+          "sample_id": 1,
+          "reason": "unsafe_code",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现相机跟随：让一个自动水平移动的圆形在场景中移动，相机跟随该对象并保持居中。"
+              ],
+              "apis": [
+                "Phaser.Cameras.Scene2D.Camera",
+                "Phaser.GameObjects.Graphics"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=1"
+            },
+            "quality": "unsafe"
+          }
+        },
+        {
+          "prompt_id": "eval_000012",
+          "sample_id": 5,
+          "reason": "unsafe_code",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个追踪镜头与震屏：玩家与敌人碰撞时触发 camera shake，并扣减生命值显示。（要求：不要使用外部图片资源，尽量用 Graphics 或纯色纹理）"
+              ],
+              "apis": [
+                "Phaser.Cameras.Scene2D.Camera",
+                "Phaser.Physics.Arcade.Sprite"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=5"
+            },
+            "quality": "unsafe"
+          }
+        },
+        {
+          "prompt_id": "eval_000015",
+          "sample_id": 1,
+          "reason": "unsafe_code",
+          "meta": {
+            "created_at": "2026-01-23T10:34:59.049362+00:00",
+            "decode": {
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "max_new_tokens": 1800
+            },
+            "plan_obj": {
+              "requirements": [
+                "实现一个简易平台跳跃：角色可左右移动与跳跃，重力为 500，并与地面碰撞不穿透。（要求：不要使用外部图片资源，尽量用 Graphics 或纯色纹理）"
+              ],
+              "apis": [
+                "Phaser.Physics.Arcade.Sprite",
+                "Phaser.Input.Keyboard.KeyCodes"
+              ],
+              "steps": [
+                "preload: prepare assets (no external files)",
+                "create: build scene objects and interactions"
+              ],
+              "notes": "mock eval variant=1"
+            },
+            "quality": "unsafe"
+          }
+        }
+      ]
+    }
+  }
+}
