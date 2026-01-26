@@ -1,156 +1,358 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+L5: 多样性与质量综合筛选脚本
 
-from __future__ import annotations
+从验证通过的候选数据中：
+1. 按 prompt_id 分组
+2. 计算质量评分
+3. 多样性筛选（代码相似度去重）
+4. 每个 prompt 选择最佳 1-2 个版本
+"""
 
+import difflib
 import argparse
-import json
-import re
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from collections import defaultdict
 
-from common import iter_jsonl, sha256_text, write_jsonl
+from common import (
+    read_jsonl, write_jsonl, write_json,
+    get_data_path, get_reports_path,
+    get_logger, generate_report_summary, print_progress,
+    normalize_code
+)
 
-
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def non_empty_lines(code: str) -> int:
-    return sum(1 for ln in (code or "").splitlines() if ln.strip())
+logger = get_logger(__name__)
 
 
-_RE_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-_RE_LINE_COMMENT = re.compile(r"//.*?$", re.MULTILINE)
-_RE_WS = re.compile(r"\s+")
+def calculate_quality_score(candidate: dict) -> float:
+    """
+    计算候选数据的质量评分 (0-1)
 
-
-def normalized_code_hash(code: str) -> str:
-    s = code or ""
-    s = _RE_BLOCK_COMMENT.sub("", s)
-    s = _RE_LINE_COMMENT.sub("", s)
-    s = _RE_WS.sub("", s)
-    return sha256_text(s)
-
-
-def bounds_for_difficulty(difficulty: str) -> Tuple[int, int]:
-    d = (difficulty or "").lower().strip()
-    if d == "easy":
-        return 12, 220
-    if d == "hard":
-        return 30, 380
-    return 20, 300
-
-
-def score_candidate(row: Dict[str, Any]) -> float:
-    v = row.get("validation") or {}
-    if not v.get("parse_ok", False):
-        return -1e9
-
+    评分维度：
+    - L1 基础分 (0.2)
+    - L2 API 准确率 (0.25)
+    - L3 运行时 (0.25)
+    - L4 结构与一致性 (0.3)
+    """
     score = 0.0
 
-    if v.get("lint_ok", False):
-        score += 1.0
-    if v.get("api_ok", False):
-        score += 2.0
-    if v.get("runtime_ok", False):
-        score += 0.5
-
-    api_usage = v.get("api_usage") or {}
-    hits = api_usage.get("hits") or []
-    misses = api_usage.get("misses") or []
-    score += min(1.0, len(hits) / 50.0)  # cap
-    score -= min(1.0, len(misses) / 20.0)
-
-    must_miss = api_usage.get("must_use_misses") or []
-    score -= min(2.0, 0.5 * len(must_miss))
-
-    prompt = row.get("prompt") or {}
-    difficulty = str(prompt.get("difficulty", "medium"))
-    lo, hi = bounds_for_difficulty(difficulty)
-    lines = non_empty_lines(str(row.get("code", "") or ""))
-    if lines < lo:
-        score -= (lo - lines) * 0.05
-    if lines > hi:
-        score -= (lines - hi) * 0.02
-
-    if row.get("plan") is not None:
+    # L1: 基础分
+    if candidate.get('l1_passed'):
         score += 0.2
-    if str(row.get("plan_raw", "")).strip():
-        score += 0.1
+        # ESLint warning 轻扣
+        validator_result = candidate.get('validator_result', {})
+        warnings = len(validator_result.get('warnings', []))
+        score -= min(0.05, warnings * 0.01)
 
-    return float(score)
+    # L2: API 准确率
+    if candidate.get('l2_passed'):
+        validator_result = candidate.get('validator_result', {})
+        api_usage = validator_result.get('api_usage', {})
+        hits = len(api_usage.get('hits', []))
+        misses = len(api_usage.get('misses', []))
+        total = hits + misses
+        if total > 0:
+            api_accuracy = hits / total
+            score += 0.25 * api_accuracy
+        else:
+            score += 0.15  # 无 API 调用时给基础分
+
+    # L3: 运行时
+    if candidate.get('l3_passed'):
+        l3_skipped = 'l3_skipped' in candidate.get('filter_issues', [])
+        if l3_skipped:
+            score += 0.15  # 跳过验证给基础分
+        else:
+            score += 0.25
+            # 运行时间奖励（快速代码加分）
+            validator_result = candidate.get('validator_result', {})
+            runtime = validator_result.get('runtime', {})
+            runtime_ms = runtime.get('ms', 1500)
+            if runtime_ms < 500:
+                score += 0.05
+
+    # L4: 结构与一致性
+    if candidate.get('l4_passed'):
+        score += 0.2
+
+        # 一致性检查
+        plan = candidate.get('plan', {})
+        if plan:
+            plan_apis = plan.get('apis', [])
+            if plan_apis:
+                validator_result = candidate.get('validator_result', {})
+                api_usage = validator_result.get('api_usage', {})
+                code_apis = set()
+                for hit in api_usage.get('hits', []):
+                    if isinstance(hit, dict):
+                        code_apis.add(hit.get('symbol_id', '').lower())
+                    else:
+                        code_apis.add(str(hit).lower())
+
+                # 计算一致性
+                matched = 0
+                for api in plan_apis:
+                    api_lower = api.lower()
+                    for code_api in code_apis:
+                        if api_lower in code_api:
+                            matched += 1
+                            break
+
+                consistency = matched / len(plan_apis)
+                score += 0.1 * consistency
+
+    return min(1.0, max(0.0, score))
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--validated", default=str(repo_root() / "stage1/data/sft_distill/validated.jsonl"))
-    ap.add_argument("--out", default=str(repo_root() / "stage1/data/sft_distill/selected.jsonl"))
-    args = ap.parse_args()
+def code_similarity(code1: str, code2: str) -> float:
+    """
+    计算两段代码的相似度 (0-1)
 
-    validated_path = Path(args.validated)
-    out_path = Path(args.out)
-    if not validated_path.exists():
-        raise SystemExit(f"validated not found: {validated_path}")
+    使用规范化后的代码进行比较
+    """
+    if not code1 or not code2:
+        return 0.0
 
-    by_prompt: Dict[str, List[Dict[str, Any]]] = {}
-    for row in iter_jsonl(validated_path):
-        pid = str(row.get("prompt_id", "")).strip() or "UNKNOWN"
-        by_prompt.setdefault(pid, []).append(row)
+    code1_norm = normalize_code(code1)
+    code2_norm = normalize_code(code2)
 
-    selected: List[Dict[str, Any]] = []
+    return difflib.SequenceMatcher(None, code1_norm, code2_norm).ratio()
+
+
+def select_diverse_candidates(
+    candidates: list[dict],
+    max_per_prompt: int = 2,
+    similarity_threshold: float = 0.85
+) -> list[dict]:
+    """
+    从同一 Prompt 的多个候选中选择最多样化的
+
+    Args:
+        candidates: 同一 prompt 的候选列表
+        max_per_prompt: 每个 prompt 最多保留的数量
+        similarity_threshold: 相似度阈值，高于此值视为重复
+
+    Returns:
+        选中的候选列表
+    """
+    if len(candidates) <= 1:
+        return candidates
+
+    # 按质量分数排序
+    sorted_candidates = sorted(
+        candidates,
+        key=lambda x: x.get('quality_score', 0),
+        reverse=True
+    )
+
+    selected = [sorted_candidates[0]]  # 先选最高分
+
+    for candidate in sorted_candidates[1:]:
+        if len(selected) >= max_per_prompt:
+            break
+
+        # 检查与已选的相似度
+        code = candidate.get('code', '')
+        is_diverse = True
+
+        for sel in selected:
+            sel_code = sel.get('code', '')
+            similarity = code_similarity(code, sel_code)
+            if similarity >= similarity_threshold:
+                is_diverse = False
+                break
+
+        if is_diverse:
+            selected.append(candidate)
+
+    return selected
+
+
+def run_selection(
+    validated_path: str,
+    output_path: str,
+    max_per_prompt: int = 2,
+    similarity_threshold: float = 0.85,
+    require_all_passed: bool = True,
+    report_path: str = None
+) -> dict:
+    """
+    运行 L5 多样性筛选
+
+    Args:
+        validated_path: L1-L4 验证后的数据文件
+        output_path: 输出文件路径
+        max_per_prompt: 每个 prompt 最多保留的数量
+        similarity_threshold: 相似度阈值
+        require_all_passed: 是否要求 L1-L4 全部通过
+        report_path: 报告输出路径
+
+    Returns:
+        筛选报告
+    """
+    logger.info(f"Loading validated candidates from {validated_path}")
+    candidates = read_jsonl(validated_path)
+    logger.info(f"Loaded {len(candidates)} candidates")
+
+    # 过滤：只保留通过验证的
+    if require_all_passed:
+        filtered = [
+            c for c in candidates
+            if c.get('l1_passed') and c.get('l2_passed') and
+               c.get('l3_passed') and c.get('l4_passed')
+        ]
+    else:
+        # 至少通过 L1 和 L4
+        filtered = [
+            c for c in candidates
+            if c.get('l1_passed') and c.get('l4_passed')
+        ]
+
+    logger.info(f"After filtering: {len(filtered)} candidates")
+
+    # 计算质量分数
+    for c in filtered:
+        c['quality_score'] = calculate_quality_score(c)
+
+    # 按 prompt_id 分组
+    grouped = defaultdict(list)
+    for c in filtered:
+        prompt_id = c.get('prompt_id', 'unknown')
+        grouped[prompt_id].append(c)
+
+    # 多样性筛选
+    selected = []
     stats = {
-        "prompts": 0,
-        "selected": 0,
-        "prompts_with_any_pass": 0,
-        "dedup_dropped": 0,
+        'total_prompts': len(grouped),
+        'selected_per_prompt': {},
+        'difficulty_distribution': defaultdict(int),
+        'quality_score_distribution': {
+            '0.0-0.3': 0,
+            '0.3-0.5': 0,
+            '0.5-0.7': 0,
+            '0.7-0.9': 0,
+            '0.9-1.0': 0
+        }
     }
 
-    for pid, rows in by_prompt.items():
-        stats["prompts"] += 1
-        scored = [(score_candidate(r), r) for r in rows]
-        scored.sort(key=lambda x: x[0], reverse=True)
+    for i, (prompt_id, prompt_candidates) in enumerate(grouped.items()):
+        diverse = select_diverse_candidates(
+            prompt_candidates,
+            max_per_prompt=max_per_prompt,
+            similarity_threshold=similarity_threshold
+        )
 
-        # Prefer those that pass hard filter, but still pick best available if none pass.
-        pass_rows = [r for _s, r in scored if r.get("filter_pass", False)]
-        pool = pass_rows if pass_rows else [r for _s, r in scored[:3]]  # keep small
-        if pass_rows:
-            stats["prompts_with_any_pass"] += 1
+        for c in diverse:
+            c['selected'] = True
+            selected.append(c)
 
-        # De-dup within the prompt by normalized code hash.
-        seen = set()
-        best = None
-        best_score = -1e9
-        for r in pool:
-            h = normalized_code_hash(str(r.get("code", "") or ""))
-            if h in seen:
-                stats["dedup_dropped"] += 1
-                continue
-            seen.add(h)
-            s = score_candidate(r)
-            if s > best_score:
-                best_score = s
-                best = r
+            # 统计难度分布
+            difficulty = c.get('prompt', {}).get('difficulty', 'unknown')
+            stats['difficulty_distribution'][difficulty] += 1
 
-        if best is None:
-            continue
+            # 统计质量分数分布
+            score = c.get('quality_score', 0)
+            if score < 0.3:
+                stats['quality_score_distribution']['0.0-0.3'] += 1
+            elif score < 0.5:
+                stats['quality_score_distribution']['0.3-0.5'] += 1
+            elif score < 0.7:
+                stats['quality_score_distribution']['0.5-0.7'] += 1
+            elif score < 0.9:
+                stats['quality_score_distribution']['0.7-0.9'] += 1
+            else:
+                stats['quality_score_distribution']['0.9-1.0'] += 1
 
-        out_row = dict(best)
-        out_row["selection_score"] = best_score
-        selected.append(out_row)
-        stats["selected"] += 1
+        stats['selected_per_prompt'][prompt_id] = len(diverse)
 
-    write_jsonl(out_path, selected)
+        print_progress(i + 1, len(grouped), prefix='Selecting')
 
-    now = datetime.now(timezone.utc).isoformat()
-    report_path = out_path.parent.parent / "reports" / "selection_report.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"created_at": now, "validated": str(validated_path), "out": str(out_path), "stats": stats}
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(report, ensure_ascii=False))
+    # 保存结果
+    write_jsonl(output_path, selected)
+    logger.info(f"Saved {len(selected)} selected candidates to {output_path}")
+
+    # 计算平均选中数
+    avg_selected = sum(stats['selected_per_prompt'].values()) / len(grouped) if grouped else 0
+
+    # 生成报告
+    report = generate_report_summary(
+        name='selection',
+        total=len(filtered),
+        passed=len(selected),
+        details={
+            'total_candidates': len(candidates),
+            'after_filter': len(filtered),
+            'total_prompts': stats['total_prompts'],
+            'avg_selected_per_prompt': round(avg_selected, 2),
+            'max_per_prompt': max_per_prompt,
+            'similarity_threshold': similarity_threshold,
+            'difficulty_distribution': dict(stats['difficulty_distribution']),
+            'quality_score_distribution': stats['quality_score_distribution'],
+            'output_path': str(output_path)
+        }
+    )
+
+    if report_path:
+        write_json(report_path, report)
+        logger.info(f"Saved report to {report_path}")
+
+    return report
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description='L5: 多样性与质量综合筛选')
+    parser.add_argument(
+        '--input', '-i',
+        type=str,
+        default=str(get_data_path('sft_distill/validated.jsonl')),
+        help='验证后的数据文件路径'
+    )
+    parser.add_argument(
+        '--output', '-o',
+        type=str,
+        default=str(get_data_path('sft_distill/selected.jsonl')),
+        help='输出文件路径'
+    )
+    parser.add_argument(
+        '--max-per-prompt',
+        type=int,
+        default=2,
+        help='每个 prompt 最多保留的数量'
+    )
+    parser.add_argument(
+        '--similarity-threshold',
+        type=float,
+        default=0.85,
+        help='相似度阈值'
+    )
+    parser.add_argument(
+        '--allow-partial',
+        action='store_true',
+        help='允许部分通过的候选（只需 L1+L4）'
+    )
+    parser.add_argument(
+        '--report',
+        type=str,
+        default=str(get_reports_path('selection_report.json')),
+        help='报告输出路径'
+    )
+
+    args = parser.parse_args()
+
+    report = run_selection(
+        validated_path=args.input,
+        output_path=args.output,
+        max_per_prompt=args.max_per_prompt,
+        similarity_threshold=args.similarity_threshold,
+        require_all_passed=not args.allow_partial,
+        report_path=args.report
+    )
+
+    print(f"\n筛选完成！")
+    print(f"  - 验证后候选: {report['details']['after_filter']}")
+    print(f"  - 最终选中: {report['passed']}")
+    print(f"  - Prompt 数: {report['details']['total_prompts']}")
+    print(f"  - 平均每 Prompt 选中: {report['details']['avg_selected_per_prompt']}")
+    print(f"  - 难度分布: {report['details']['difficulty_distribution']}")
+
+
+if __name__ == '__main__':
     main()
-

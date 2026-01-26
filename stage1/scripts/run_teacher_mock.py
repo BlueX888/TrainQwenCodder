@@ -1,135 +1,369 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+教师模型 Mock 脚本
 
-from __future__ import annotations
+用于测试蒸馏管线，生成模拟的教师模型输出。
+实际蒸馏时应替换为真实的 API 调用。
+"""
 
-import argparse
-import json
 import random
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List
+import argparse
+from datetime import datetime
 
-from common import iter_jsonl, write_jsonl
+from common import (
+    read_jsonl, write_jsonl, append_jsonl,
+    get_data_path, ensure_dir,
+    get_logger, print_progress, Checkpoint
+)
+
+logger = get_logger(__name__)
+
+# Mock 代码模板
+MOCK_CODE_TEMPLATES = [
+    # 基础旋转
+    '''const config = {
+  type: Phaser.HEADLESS,
+  width: 800,
+  height: 600,
+  scene: { create, update }
+};
+
+let graphics;
+const ROTATION_SPEED = {rotation_speed} * Math.PI / 180;
+
+function create() {
+  graphics = this.add.graphics();
+  graphics.fillStyle(0x{color}, 1);
+  graphics.fillCircle(0, 0, {radius});
+  graphics.x = 400;
+  graphics.y = 300;
+}
+
+function update(time, delta) {
+  graphics.rotation += ROTATION_SPEED * delta / 1000;
+}
+
+new Phaser.Game(config);''',
+
+    # 输入处理
+    '''const config = {
+  type: Phaser.HEADLESS,
+  width: 800,
+  height: 600,
+  scene: { preload, create, update }
+};
+
+let player;
+let cursors;
+
+function preload() {
+  // 使用 graphics 替代图片
+}
+
+function create() {
+  const graphics = this.add.graphics();
+  graphics.fillStyle(0x{color}, 1);
+  graphics.fillRect(-{size}/2, -{size}/2, {size}, {size});
+  graphics.generateTexture('player', {size}, {size});
+  graphics.destroy();
+
+  player = this.add.sprite(400, 300, 'player');
+  cursors = this.input.keyboard.createCursorKeys();
+}
+
+function update() {
+  const speed = {speed};
+  if (cursors.left.isDown) player.x -= speed;
+  if (cursors.right.isDown) player.x += speed;
+  if (cursors.up.isDown) player.y -= speed;
+  if (cursors.down.isDown) player.y += speed;
+}
+
+new Phaser.Game(config);''',
+
+    # 点击交互
+    '''const config = {
+  type: Phaser.HEADLESS,
+  width: 800,
+  height: 600,
+  scene: { preload, create }
+};
+
+function preload() {
+  // 无需预加载
+}
+
+function create() {
+  const graphics = this.add.graphics();
+  graphics.fillStyle(0x{color}, 1);
+  graphics.fillRect(300, 200, {width}, {height});
+  graphics.setInteractive(new Phaser.Geom.Rectangle(300, 200, {width}, {height}), Phaser.Geom.Rectangle.Contains);
+
+  graphics.on('pointerdown', () => {
+    graphics.fillStyle(0x{alt_color}, 1);
+    graphics.clear();
+    graphics.fillRect(300, 200, {width}, {height});
+  });
+
+  this.input.on('pointerdown', (pointer) => {
+    console.log('Click at', pointer.x, pointer.y);
+  });
+}
+
+new Phaser.Game(config);''',
+
+    # 物理系统
+    '''const config = {
+  type: Phaser.HEADLESS,
+  width: 800,
+  height: 600,
+  physics: {
+    default: 'arcade',
+    arcade: { gravity: { y: {gravity} }, debug: false }
+  },
+  scene: { preload, create, update }
+};
+
+let player;
+let cursors;
+
+function preload() {
+  // 创建纹理
+}
+
+function create() {
+  const graphics = this.add.graphics();
+  graphics.fillStyle(0x{color}, 1);
+  graphics.fillRect(0, 0, {size}, {size});
+  graphics.generateTexture('box', {size}, {size});
+  graphics.destroy();
+
+  player = this.physics.add.sprite(400, 100, 'box');
+  player.setBounce({bounce});
+  player.setCollideWorldBounds(true);
+
+  cursors = this.input.keyboard.createCursorKeys();
+}
+
+function update() {
+  if (cursors.left.isDown) {
+    player.setVelocityX(-{speed});
+  } else if (cursors.right.isDown) {
+    player.setVelocityX({speed});
+  } else {
+    player.setVelocityX(0);
+  }
+
+  if (cursors.up.isDown && player.body.touching.down) {
+    player.setVelocityY(-{jump});
+  }
+}
+
+new Phaser.Game(config);'''
+]
 
 
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+def generate_mock_output(request: dict) -> dict:
+    """
+    生成模拟的教师模型输出
 
+    Args:
+        request: 蒸馏请求
 
-def make_mock_output(req: Dict[str, Any], rng: random.Random) -> str:
-    prompt = req.get("prompt") or {}
-    task = str(prompt.get("task", "")).strip()
-    must_use = prompt.get("must_use_apis") or []
-    must_use = [str(x) for x in must_use if x]
+    Returns:
+        模拟的输出数据
+    """
+    prompt = request.get('prompt_meta', {})
+    difficulty = prompt.get('difficulty', 'easy')
+    modules = prompt.get('modules', [])
+    task = prompt.get('task', '')
 
-    apis = must_use[:]
-    steps = ["preload: prepare assets (no external files)", "create: build scene objects and interactions"]
-    plan = {
-        "requirements": [task] if task else [],
-        "apis": apis,
-        "steps": steps,
-        "notes": "mock teacher output for pipeline testing",
+    # 选择模板
+    template_idx = random.randint(0, len(MOCK_CODE_TEMPLATES) - 1)
+
+    # 根据难度调整参数
+    if difficulty == 'easy':
+        params = {
+            'rotation_speed': random.randint(30, 90),
+            'color': format(random.randint(0, 0xFFFFFF), '06x'),
+            'alt_color': format(random.randint(0, 0xFFFFFF), '06x'),
+            'radius': random.randint(30, 60),
+            'size': random.randint(32, 64),
+            'width': random.randint(100, 200),
+            'height': random.randint(80, 150),
+            'speed': random.randint(3, 6),
+            'gravity': random.randint(200, 400),
+            'bounce': round(random.uniform(0.3, 0.6), 1),
+            'jump': random.randint(300, 400)
+        }
+    elif difficulty == 'medium':
+        params = {
+            'rotation_speed': random.randint(60, 120),
+            'color': format(random.randint(0, 0xFFFFFF), '06x'),
+            'alt_color': format(random.randint(0, 0xFFFFFF), '06x'),
+            'radius': random.randint(40, 80),
+            'size': random.randint(32, 48),
+            'width': random.randint(150, 250),
+            'height': random.randint(100, 180),
+            'speed': random.randint(4, 8),
+            'gravity': random.randint(300, 500),
+            'bounce': round(random.uniform(0.4, 0.8), 1),
+            'jump': random.randint(350, 500)
+        }
+    else:  # hard
+        params = {
+            'rotation_speed': random.randint(90, 180),
+            'color': format(random.randint(0, 0xFFFFFF), '06x'),
+            'alt_color': format(random.randint(0, 0xFFFFFF), '06x'),
+            'radius': random.randint(50, 100),
+            'size': random.randint(24, 40),
+            'width': random.randint(200, 300),
+            'height': random.randint(150, 220),
+            'speed': random.randint(5, 10),
+            'gravity': random.randint(400, 600),
+            'bounce': round(random.uniform(0.5, 0.9), 1),
+            'jump': random.randint(400, 600)
+        }
+
+    # 生成代码
+    template = MOCK_CODE_TEMPLATES[template_idx]
+    code = template.format(**params)
+
+    # 生成 Plan
+    api_list = ['Phaser.Game', 'Phaser.Scene']
+    if 'physics' in template.lower():
+        api_list.extend(['Phaser.Physics.Arcade.Sprite', 'Phaser.Input.Keyboard.CursorKeys'])
+    if 'graphics' in template.lower():
+        api_list.append('Phaser.GameObjects.Graphics')
+    if 'input' in template.lower():
+        api_list.append('Phaser.Input.Pointer')
+
+    plan_text = f"""[PLAN]
+REQ: {task[:50] if task else '实现基础 Phaser3 功能'}
+API: {', '.join(api_list[:5])}
+STEPS:
+1. 配置 Phaser Game 和 Scene
+2. 在 create 中创建游戏对象
+3. 实现交互或动画逻辑
+[/PLAN]"""
+
+    # 组合输出
+    raw_output = f"""{plan_text}
+
+```javascript
+{code}
+```"""
+
+    return {
+        'id': request.get('id', ''),
+        'prompt_id': request.get('prompt_id', ''),
+        'version': request.get('version', 1),
+        'prompt_meta': prompt,
+        'raw_output': raw_output,
+        'output': raw_output,
+        'teacher_model': 'mock',
+        'api_context_injected': request.get('api_context_injected', []),
+        'timestamp': datetime.now().isoformat()
     }
 
-    # A small skeleton that tries to satisfy common must_use patterns used by prompt seeds.
-    w = rng.choice([320, 480, 800])
-    h = rng.choice([240, 320, 600])
-    color = rng.choice([0xff0000, 0x00ff00, 0x0000ff, 0xffff00])
 
-    # Try to include a common must-use event if present.
-    event_const = None
-    for m in must_use:
-        if m.startswith("Phaser.Input.Events."):
-            event_const = m
-            break
+def run_mock_distill(
+    requests_path: str,
+    output_path: str,
+    max_items: int = None,
+    checkpoint_path: str = None
+) -> int:
+    """
+    运行 Mock 蒸馏
 
-    need_physics = any(m.startswith("Phaser.Physics.Arcade.") for m in must_use)
+    Args:
+        requests_path: 请求文件路径
+        output_path: 输出文件路径
+        max_items: 最大处理数量
+        checkpoint_path: 检查点路径
 
-    lines: List[str] = []
-    lines.append("const config = {")
-    lines.append("  type: Phaser.HEADLESS,")
-    lines.append(f"  width: {w},")
-    lines.append(f"  height: {h},")
-    if need_physics:
-        lines.append("  physics: { default: 'arcade', arcade: { gravity: { y: 300 }, debug: false } },")
-    lines.append("  scene: {")
-    lines.append("    preload() {")
-    lines.append("      // no external assets")
-    lines.append("    },")
-    lines.append("    create() {")
-    lines.append("      const g = this.add.graphics();")
-    lines.append(f"      g.fillStyle({color}, 1);")
-    lines.append("      g.fillRect(20, 20, 60, 60);")
+    Returns:
+        处理的请求数量
+    """
+    logger.info(f"Loading requests from {requests_path}")
+    requests = read_jsonl(requests_path)
+    logger.info(f"Loaded {len(requests)} requests")
 
-    if any(m == "Phaser.GameObjects.Text" for m in must_use):
-        lines.append("      this.add.text(10, 10, 'score: 0');")
+    if max_items:
+        requests = requests[:max_items]
+        logger.info(f"Limited to {max_items} requests")
 
-    if any(m == "Phaser.Cameras.Scene2D.Camera" for m in must_use):
-        lines.append("      const cam = this.cameras.main;")
-        lines.append("      cam.setBackgroundColor('#222');")
+    # 检查点
+    checkpoint = Checkpoint(checkpoint_path) if checkpoint_path else None
+    if checkpoint:
+        logger.info(f"Resuming from checkpoint: {len(checkpoint)} processed")
 
-    if any(m == "Phaser.Tweens.Tween" for m in must_use):
-        lines.append("      this.tweens.add({ targets: g, alpha: 0.2, yoyo: true, repeat: -1, duration: 400 });")
+    ensure_dir(output_path.rsplit('/', 1)[0] if '/' in output_path else '.')
 
-    if any(m == "Phaser.GameObjects.Particles.ParticleEmitterManager" for m in must_use):
-        lines.append("      // NOTE: mock-only; may not run without a texture, but is useful for AST/API validation.")
-        lines.append("      this.add.particles(0, 0, '__pt', { speed: 10, lifespan: 300, quantity: 1 });")
+    count = 0
+    for i, request in enumerate(requests):
+        req_id = request.get('id', f'req_{i}')
 
-    if any(m == "Phaser.Physics.Arcade.Group" for m in must_use):
-        lines.append("      this.physics.add.group();")
+        if checkpoint and checkpoint.is_done(req_id):
+            continue
 
-    if any(m == "Phaser.Physics.Arcade.Sprite" for m in must_use):
-        lines.append("      // NOTE: mock-only; sprite key may not exist in runtime, but passes AST/API checks.")
-        lines.append("      this.physics.add.sprite(100, 100, '__spr');")
+        output = generate_mock_output(request)
+        append_jsonl(output_path, output)
 
-    if any(m == "Phaser.Input.Keyboard.KeyCodes" for m in must_use):
-        lines.append("      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);")
+        if checkpoint:
+            checkpoint.mark_done(req_id)
+            if (i + 1) % 100 == 0:
+                checkpoint.save()
 
-    if event_const:
-        lines.append(f"      this.input.on({event_const}, () => {{}});")
-    else:
-        lines.append("      this.input.on(Phaser.Input.Events.POINTER_DOWN, () => {});")
-    lines.append("    }")
-    lines.append("  }")
-    lines.append("};")
-    lines.append("new Phaser.Game(config);")
+        count += 1
+        print_progress(i + 1, len(requests), prefix='Mock distill')
 
-    code = "\n".join(lines)
+    if checkpoint:
+        checkpoint.save()
 
-    return "plan:\n" + json.dumps(plan, ensure_ascii=False) + "\ncode:\n" + code + "\n"
+    logger.info(f"Generated {count} mock outputs to {output_path}")
+    return count
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--requests", default=str(repo_root() / "stage1/data/sft_distill/requests.jsonl"))
-    ap.add_argument("--out", default=str(repo_root() / "stage1/data/sft_distill/raw_outputs.jsonl"))
-    ap.add_argument("--seed", type=int, default=2025)
-    args = ap.parse_args()
+def main():
+    parser = argparse.ArgumentParser(description='运行 Mock 教师蒸馏')
+    parser.add_argument(
+        '--requests', '-r',
+        type=str,
+        default=str(get_data_path('sft_distill/requests.jsonl')),
+        help='请求文件路径'
+    )
+    parser.add_argument(
+        '--output', '-o',
+        type=str,
+        default=str(get_data_path('sft_distill/raw_outputs.jsonl')),
+        help='输出文件路径'
+    )
+    parser.add_argument(
+        '--max-items', '-n',
+        type=int,
+        default=None,
+        help='最大处理数量（用于测试）'
+    )
+    parser.add_argument(
+        '--checkpoint',
+        type=str,
+        default=None,
+        help='检查点文件路径'
+    )
 
-    req_path = Path(args.requests)
-    out_path = Path(args.out)
-    if not req_path.exists():
-        raise SystemExit(f"requests not found: {req_path}")
+    args = parser.parse_args()
 
-    rng = random.Random(int(args.seed))
-    now = datetime.now(timezone.utc).isoformat()
+    count = run_mock_distill(
+        requests_path=args.requests,
+        output_path=args.output,
+        max_items=args.max_items,
+        checkpoint_path=args.checkpoint
+    )
 
-    rows: List[Dict[str, Any]] = []
-    for req in iter_jsonl(req_path):
-        rows.append(
-            {
-                "request_id": req.get("request_id", ""),
-                "teacher_model": "mock",
-                "finish_reason": "stop",
-                "text": make_mock_output(req, rng),
-                "created_at": now,
-            }
-        )
-
-    write_jsonl(out_path, rows)
-    print(f"Wrote {len(rows)} raw outputs -> {out_path}")
+    print(f"\nMock 蒸馏完成！")
+    print(f"  - 生成数量: {count}")
+    print(f"  - 输出路径: {args.output}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

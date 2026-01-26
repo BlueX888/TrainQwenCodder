@@ -1,9 +1,0 @@
-{
-  "created_at": "2026-01-23T09:54:46.515079+00:00",
-  "prompt_seeds": "/Users/admin/Desktop/TrainQwenCodder/stage0/data/prompt_seeds/prompt_seeds.jsonl",
-  "api_index": "/Users/admin/Desktop/TrainQwenCodder/stage0/data/api_index/phaser_api.jsonl",
-  "out": "stage1/data/sft_distill/requests.jsonl",
-  "variants": 2,
-  "top_k": 5,
-  "total_requests": 10
-}
