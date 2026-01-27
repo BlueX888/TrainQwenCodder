@@ -1,29 +1,27 @@
 {
   "name": "selection",
-  "timestamp": "2026-01-27T14:20:33.356705",
-  "total": 4251,
-  "passed": 3290,
-  "failed": 961,
-  "pass_rate": 77.39,
+  "timestamp": "2026-01-27T16:44:41.259511",
+  "total": 56,
+  "passed": 31,
+  "failed": 25,
+  "pass_rate": 55.36,
   "details": {
-    "total_candidates": 6100,
-    "after_filter": 4251,
-    "total_prompts": 1932,
-    "avg_selected_per_prompt": 1.7,
+    "total_candidates": 60,
+    "after_filter": 56,
+    "total_prompts": 17,
+    "avg_selected_per_prompt": 1.82,
     "max_per_prompt": 2,
     "similarity_threshold": 0.85,
     "difficulty_distribution": {
-      "easy": 1393,
-      "medium": 1388,
-      "hard": 509
+      "easy": 31
     },
     "quality_score_distribution": {
       "0.0-0.3": 0,
       "0.3-0.5": 0,
-      "0.5-0.7": 3290,
-      "0.7-0.9": 0,
+      "0.5-0.7": 25,
+      "0.7-0.9": 6,
       "0.9-1.0": 0
     },
-    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/selected.jsonl"
+    "output_path": "../data/sft_distill/selected_claude.jsonl"
   }
 }

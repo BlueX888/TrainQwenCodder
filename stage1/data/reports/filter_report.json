@@ -1,28 +1,28 @@
 {
   "name": "validator_filter",
-  "timestamp": "2026-01-27T12:45:45.835003",
-  "total": 6100,
+  "timestamp": "2026-01-27T16:40:24.232395",
+  "total": 60,
   "passed": 0,
-  "failed": 6100,
+  "failed": 60,
   "pass_rate": 0.0,
   "details": {
-    "l1_passed": 4558,
-    "l1_rate": 74.72,
+    "l1_passed": 56,
+    "l1_rate": 93.33,
     "l2_passed": 0,
     "l2_rate": 0.0,
-    "l3_passed": 6100,
+    "l3_passed": 60,
     "l3_rate": 100.0,
-    "l4_passed": 5793,
-    "l4_rate": 94.97,
-    "skip_runtime": true,
+    "l4_passed": 60,
+    "l4_rate": 100.0,
+    "skip_runtime": false,
     "issue_distribution": {
-      "l2_must_use_miss": 6100,
-      "l3_skipped": 6100,
-      "l4_low_plan_code_consistency": 6100,
-      "l1_lint_failed": 1542,
-      "l1_lint_error": 1542,
-      "l4_hard_missing_preload": 307
+      "l2_must_use_miss": 60,
+      "l4_low_plan_code_consistency": 49,
+      "l2_high_miss_rate": 7,
+      "l2_warning_miss_rate": 7,
+      "l1_lint_failed": 4,
+      "l1_lint_error": 4
     },
-    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/validated.jsonl"
+    "output_path": "../data/sft_distill/validated_claude.jsonl"
   }
 }

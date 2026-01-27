@@ -1,0 +1,80 @@
+# LLaMA-Factory SFT 测试配置文件
+# 用于 Qwen2.5-Coder-0.5B 的 Phaser3 代码生成微调
+# 使用 31 条测试数据集验证训练流程
+
+### Model
+model_name_or_path: Qwen/Qwen2.5-Coder-0.5B
+
+### Method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_target: all
+
+# 针对小数据集优化的 LoRA 参数
+lora_rank: 32          # 从 64 降低到 32（数据集小，减少参数）
+lora_alpha: 64         # alpha/rank = 2.0 保持不变
+lora_dropout: 0.1      # 从 0.05 增加到 0.1（防止过拟合）
+
+### Dataset
+# 使用测试数据集（31 条样本）
+dataset_dir: /Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_dataset_test
+template: qwen
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### Output
+output_dir: stage1/outputs/qwen_coder_0.5b_sft_test
+logging_steps: 5       # 更频繁的日志输出（数据少）
+save_steps: 50         # 更频繁的检查点保存
+save_total_limit: 2    # 只保留最近 2 个检查点
+plot_loss: true
+overwrite_output_dir: true
+
+### Train
+# 针对小数据集优化的训练参数
+per_device_train_batch_size: 2      # 降低到 2（数据少）
+gradient_accumulation_steps: 2      # 有效 batch size = 2 × 2 = 4
+learning_rate: 3.0e-5                # 降低学习率防止过拟合
+num_train_epochs: 5                  # 增加 epochs（数据少需要更多轮次）
+lr_scheduler_type: cosine
+warmup_steps: 10                     # 固定 warmup 步数（比例不适用小数据集）
+bf16: true
+ddp_timeout: 180000000
+
+### Eval
+# 使用独立的验证文件
+val_size: 0.0                        # 设为 0 表示使用独立的 val.jsonl
+per_device_eval_batch_size: 1
+eval_strategy: steps
+eval_steps: 20                       # 每 20 步评估一次
+
+### Optional: 内存优化（如果 GPU 内存不足可取消注释）
+# quantization_bit: 4
+# quantization_method: bitsandbytes
+
+---
+# 注意事项：
+#
+# 1. 测试数据集仅 31 条样本（train: 29, val: 1, test: 1）
+#    - 仅用于验证训练流程是否正常
+#    - 不期望获得高质量模型
+#    - 必然会出现过拟合（这是正常的）
+#
+# 2. 配置参数已针对小数据集优化：
+#    - 降低了 LoRA rank（减少参数量）
+#    - 增加了 dropout（防止过拟合）
+#    - 降低了学习率（更稳定的训练）
+#    - 增加了 epochs（数据少需要更多轮次）
+#    - 减小了 batch size（适配小数据集）
+#
+# 3. 切换到完整数据集：
+#    - 修改 dataset_dir 指向 stage1/data/sft_dataset
+#    - 使用 sft_config_example.yaml 的参数
+#    - 预期可获得 3000+ 训练样本
+#
+# 4. 预期训练时间：
+#    - CPU: ~1-2 小时
+#    - GPU (单卡): ~10-20 分钟
+#    - GPU (多卡): 更快
