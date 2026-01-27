@@ -13,7 +13,7 @@ import json
 import argparse
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple, List, Dict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from common import (
@@ -114,7 +114,7 @@ def call_validator(
         }
 
 
-def check_l1(validator_result: dict, code: str) -> tuple[bool, list[str]]:
+def check_l1(validator_result: dict, code: str) -> Tuple[bool, List[str]]:
     """
     L1: 语法与基础规范检查
 
@@ -157,7 +157,7 @@ def check_l1(validator_result: dict, code: str) -> tuple[bool, list[str]]:
     return passed, issues
 
 
-def check_l2(validator_result: dict, prompt: dict) -> tuple[bool, list[str]]:
+def check_l2(validator_result: dict, prompt: dict) -> Tuple[bool, List[str]]:
     """
     L2: API 语义与领域知识验证
 
@@ -199,7 +199,7 @@ def check_l2(validator_result: dict, prompt: dict) -> tuple[bool, list[str]]:
     return passed, issues
 
 
-def check_l3(validator_result: dict, skip_runtime: bool = False) -> tuple[bool, list[str]]:
+def check_l3(validator_result: dict, skip_runtime: bool = False) -> Tuple[bool, List[str]]:
     """
     L3: 运行时正确性验证
 
@@ -234,7 +234,7 @@ def check_l3(validator_result: dict, skip_runtime: bool = False) -> tuple[bool, 
     return passed, issues
 
 
-def check_l4(validator_result: dict, candidate: dict) -> tuple[bool, list[str]]:
+def check_l4(validator_result: dict, candidate: dict) -> Tuple[bool, List[str]]:
     """
     L4: 功能匹配度验证
 

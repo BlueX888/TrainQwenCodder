@@ -28,14 +28,32 @@ cd scripts
 python build_distill_requests.py
 ```
 
-#### 步骤 2: 运行教师蒸馏（Mock 测试）
+#### 步骤 2: 运行教师蒸馏
+
+**选项 A：Mock 测试（快速测试管线，代码质量低）**
 
 ```bash
 # 使用 Mock 脚本测试管线
 python run_teacher_mock.py --max-items 100
-
-# 实际蒸馏请替换为真实 API 调用
 ```
+
+**选项 B：Claude API（生产级质量，需要 API Key 和成本）**
+
+```bash
+# 安装依赖
+pip install anthropic
+
+# 设置 API Key
+export ANTHROPIC_API_KEY='sk-ant-xxxxx'
+
+# 测试运行 10 条
+python run_teacher_claude.py --max-items 10
+
+# 完整运行（~$90, 3-4 小时）
+python run_teacher_claude.py
+```
+
+详细说明见：[使用Claude API蒸馏指南.md](./使用Claude%20API蒸馏指南.md)
 
 #### 步骤 3: 解析教师输出
 
@@ -124,4 +142,5 @@ Prompt 种子库 (2000)
 ## 详细文档
 
 参见项目根目录的 `阶段一-SFT冷启动-详细实施文档.md`。  
-本目录脚本与数据流的实现细节说明见：`DETAILS.md`。
+本目录脚本与数据流的实现细节说明见：`DETAILS.md`。  
+本目录文件/目录索引见：`目录说明.md`。

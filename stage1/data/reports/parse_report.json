@@ -1,0 +1,16 @@
+{
+  "name": "parse_teacher_outputs",
+  "timestamp": "2026-01-27T12:22:56.817154",
+  "total": 6100,
+  "passed": 6100,
+  "failed": 0,
+  "pass_rate": 100.0,
+  "details": {
+    "plan_parsed": 6100,
+    "code_parsed": 6100,
+    "validation_passed": 6100,
+    "error_distribution": {},
+    "parse_rate": 100.0,
+    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/candidates.jsonl"
+  }
+}

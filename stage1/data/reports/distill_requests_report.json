@@ -1,0 +1,29 @@
+{
+  "name": "distill_requests",
+  "timestamp": "2026-01-27T12:14:56.843411",
+  "total": 6000,
+  "passed": 6000,
+  "failed": 0,
+  "pass_rate": 100.0,
+  "details": {
+    "prompts_count": 2000,
+    "versions_per_prompt": 3,
+    "top_k_apis": 20,
+    "difficulty_distribution": {
+      "easy": 2400,
+      "medium": 2400,
+      "hard": 1200
+    },
+    "module_distribution": {
+      "Scene": 6000,
+      "GameObjects": 3480,
+      "Input": 2427,
+      "Animations": 849,
+      "Camera": 300,
+      "Particles": 111,
+      "Physics": 2358,
+      "Tilemap": 99
+    },
+    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/requests.jsonl"
+  }
+}

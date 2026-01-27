@@ -7,7 +7,7 @@ API BM25 检索模块
 import math
 import re
 from collections import Counter
-from typing import Optional
+from typing import Optional, List, Dict
 from pathlib import Path
 
 from common import read_jsonl, get_stage0_path, get_logger
@@ -32,15 +32,15 @@ class BM25Index:
         self.b = b
         self.min_token_len = min_token_len
 
-        self.documents: list[dict] = []
-        self.doc_tokens: list[list[str]] = []
-        self.doc_lens: list[int] = []
+        self.documents: List[dict] = []
+        self.doc_tokens: List[List[str]] = []
+        self.doc_lens: List[int] = []
         self.avgdl: float = 0.0
         self.df: Counter = Counter()  # document frequency
-        self.idf: dict[str, float] = {}
+        self.idf: Dict[str, float] = {}
         self.n_docs: int = 0
 
-    def _tokenize(self, text: str) -> list[str]:
+    def _tokenize(self, text: str) -> List[str]:
         """
         分词处理
 
@@ -80,7 +80,7 @@ class BM25Index:
         ]
         return ' '.join(parts)
 
-    def build(self, apis: list[dict]) -> None:
+    def build(self, apis: List[dict]) -> None:
         """
         构建索引
 
@@ -109,7 +109,7 @@ class BM25Index:
 
         logger.info(f"Built BM25 index with {self.n_docs} documents")
 
-    def _score(self, query_tokens: list[str], doc_idx: int) -> float:
+    def _score(self, query_tokens: List[str], doc_idx: int) -> float:
         """计算单个文档的 BM25 分数"""
         doc_tokens = self.doc_tokens[doc_idx]
         doc_len = self.doc_lens[doc_idx]
@@ -126,7 +126,7 @@ class BM25Index:
 
         return score
 
-    def search(self, query: str, top_k: int = 20) -> list[dict]:
+    def search(self, query: str, top_k: int = 20) -> List[dict]:
         """
         搜索 API
 
@@ -196,7 +196,7 @@ class APIRetriever:
         self.bm25 = BM25Index()
         self.bm25.build(apis)
 
-    def search(self, query: str, top_k: int = 20) -> list[dict]:
+    def search(self, query: str, top_k: int = 20) -> List[dict]:
         """
         搜索 API
 
@@ -214,7 +214,7 @@ class APIRetriever:
         self,
         prompt: dict,
         top_k: int = 20
-    ) -> list[dict]:
+    ) -> List[dict]:
         """
         根据 Prompt 搜索相关 API
 
@@ -253,7 +253,7 @@ class APIRetriever:
 
     def format_api_context(
         self,
-        apis: list[dict],
+        apis: List[dict],
         max_apis: int = 20,
         include_params: bool = True
     ) -> str:
@@ -271,7 +271,7 @@ class APIRetriever:
         lines = []
 
         # 按 owner 分组
-        grouped: dict[str, list[dict]] = {}
+        grouped: Dict[str, List[dict]] = {}
         for api in apis[:max_apis]:
             owner = api.get('owner', 'Other')
             if owner not in grouped:
@@ -315,17 +315,17 @@ def get_retriever(api_index_path: Optional[str] = None) -> APIRetriever:
     return _retriever
 
 
-def search_apis(query: str, top_k: int = 20) -> list[dict]:
+def search_apis(query: str, top_k: int = 20) -> List[dict]:
     """便捷函数：搜索 API"""
     return get_retriever().search(query, top_k)
 
 
-def search_apis_for_prompt(prompt: dict, top_k: int = 20) -> list[dict]:
+def search_apis_for_prompt(prompt: dict, top_k: int = 20) -> List[dict]:
     """便捷函数：根据 Prompt 搜索 API"""
     return get_retriever().search_for_prompt(prompt, top_k)
 
 
-def format_api_context(apis: list[dict], max_apis: int = 20) -> str:
+def format_api_context(apis: List[dict], max_apis: int = 20) -> str:
     """便捷函数：格式化 API 上下文"""
     return get_retriever().format_api_context(apis, max_apis)
 

@@ -9,7 +9,7 @@ import os
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any, Iterator, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
 from datetime import datetime
 
 # 配置日志
@@ -59,7 +59,7 @@ def get_reports_path(filename: str) -> Path:
 
 # ============ JSONL 读写 ============
 
-def read_jsonl(path: Union[str, Path]) -> list[dict]:
+def read_jsonl(path: Union[str, Path]) -> List[dict]:
     """
     读取 JSONL 文件为列表
 
@@ -110,7 +110,7 @@ def iter_jsonl(path: Union[str, Path]) -> Iterator[dict]:
                     continue
 
 
-def write_jsonl(path: Union[str, Path], items: list[dict], mode: str = 'w') -> int:
+def write_jsonl(path: Union[str, Path], items: List[dict], mode: str = 'w') -> int:
     """
     写入 JSONL 文件
 
@@ -182,7 +182,7 @@ class JsonlCache:
     def __init__(self, cache_path: Union[str, Path], key_field: str = 'key'):
         self.cache_path = Path(cache_path)
         self.key_field = key_field
-        self._cache: dict[str, dict] = {}
+        self._cache: Dict[str, dict] = {}
         self._load()
 
     def _load(self) -> None:

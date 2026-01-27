@@ -6,7 +6,7 @@
 
 import re
 import argparse
-from typing import Optional
+from typing import Optional, Tuple, List, Dict
 from datetime import datetime
 
 from common import (
@@ -18,7 +18,7 @@ from common import (
 logger = get_logger(__name__)
 
 
-def parse_plan(raw_output: str) -> tuple[Optional[dict], list[str]]:
+def parse_plan(raw_output: str) -> Tuple[Optional[dict], List[str]]:
     """
     解析 [PLAN] 块
 
@@ -80,7 +80,7 @@ def parse_plan(raw_output: str) -> tuple[Optional[dict], list[str]]:
     return plan, errors
 
 
-def parse_code(raw_output: str) -> tuple[Optional[str], list[str]]:
+def parse_code(raw_output: str) -> Tuple[Optional[str], List[str]]:
     """
     解析代码块
 
@@ -168,7 +168,7 @@ def parse_teacher_output(raw_output: str) -> dict:
     return result
 
 
-def validate_code(code: str) -> tuple[bool, list[str]]:
+def validate_code(code: str) -> Tuple[bool, List[str]]:
     """
     基础代码验证（不调用 validator）
 

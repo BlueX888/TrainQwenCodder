@@ -11,6 +11,7 @@ import random
 import argparse
 from collections import defaultdict
 from pathlib import Path
+from typing import List, Dict, Tuple
 
 from common import (
     read_jsonl, write_jsonl, write_json,
@@ -119,7 +120,7 @@ def convert_to_sft_format(candidate: dict, source: str = 'distill') -> dict:
     }
 
 
-def deduplicate_by_code(items: list[dict], threshold: float = 0.95) -> list[dict]:
+def deduplicate_by_code(items: List[dict], threshold: float = 0.95) -> List[dict]:
     """
     基于代码相似度去重
 
@@ -159,12 +160,12 @@ def deduplicate_by_code(items: list[dict], threshold: float = 0.95) -> list[dict
 
 
 def stratified_split(
-    items: list[dict],
+    items: List[dict],
     train_ratio: float = 0.9,
     val_ratio: float = 0.05,
     test_ratio: float = 0.05,
     seed: int = 42
-) -> tuple[list[dict], list[dict], list[dict]]:
+) -> Tuple[List[dict], List[dict], List[dict]]:
     """
     分层划分数据集
 

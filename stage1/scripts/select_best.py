@@ -11,6 +11,7 @@ L5: 多样性与质量综合筛选脚本
 import difflib
 import argparse
 from collections import defaultdict
+from typing import List, Dict
 
 from common import (
     read_jsonl, write_jsonl, write_json,
@@ -118,10 +119,10 @@ def code_similarity(code1: str, code2: str) -> float:
 
 
 def select_diverse_candidates(
-    candidates: list[dict],
+    candidates: List[dict],
     max_per_prompt: int = 2,
     similarity_threshold: float = 0.85
-) -> list[dict]:
+) -> List[dict]:
     """
     从同一 Prompt 的多个候选中选择最多样化的
 
