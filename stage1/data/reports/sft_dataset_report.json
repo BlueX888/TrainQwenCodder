@@ -1,26 +1,26 @@
 {
   "name": "sft_dataset",
-  "timestamp": "2026-01-27T16:44:51.685096",
-  "total": 31,
-  "passed": 31,
+  "timestamp": "2026-01-27T17:58:32.032597",
+  "total": 64,
+  "passed": 64,
   "failed": 0,
   "pass_rate": 100.0,
   "details": {
-    "distill_count": 31,
+    "distill_count": 64,
     "official_count": 0,
-    "after_dedup": 31,
-    "train_count": 29,
-    "val_count": 1,
-    "test_count": 1,
-    "train_ratio": 93.55,
-    "val_ratio": 3.23,
-    "test_ratio": 3.23,
+    "after_dedup": 64,
+    "train_count": 58,
+    "val_count": 3,
+    "test_count": 3,
+    "train_ratio": 90.62,
+    "val_ratio": 4.69,
+    "test_ratio": 4.69,
     "difficulty_distribution": {
-      "easy": 31
+      "easy": 64
     },
     "source_distribution": {
-      "distill": 31
+      "distill": 64
     },
-    "output_dir": "../data/sft_dataset_test"
+    "output_dir": "../data/sft_dataset_160"
   }
 }

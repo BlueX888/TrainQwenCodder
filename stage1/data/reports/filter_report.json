@@ -1,27 +1,27 @@
 {
   "name": "validator_filter",
-  "timestamp": "2026-01-27T16:40:24.232395",
-  "total": 60,
+  "timestamp": "2026-01-27T18:09:06.388754",
+  "total": 160,
   "passed": 0,
-  "failed": 60,
+  "failed": 160,
   "pass_rate": 0.0,
   "details": {
-    "l1_passed": 56,
-    "l1_rate": 93.33,
+    "l1_passed": 150,
+    "l1_rate": 93.75,
     "l2_passed": 0,
     "l2_rate": 0.0,
-    "l3_passed": 60,
+    "l3_passed": 160,
     "l3_rate": 100.0,
-    "l4_passed": 60,
+    "l4_passed": 160,
     "l4_rate": 100.0,
     "skip_runtime": false,
     "issue_distribution": {
-      "l2_must_use_miss": 60,
-      "l4_low_plan_code_consistency": 49,
-      "l2_high_miss_rate": 7,
-      "l2_warning_miss_rate": 7,
-      "l1_lint_failed": 4,
-      "l1_lint_error": 4
+      "l2_must_use_miss": 160,
+      "l4_low_plan_code_consistency": 142,
+      "l2_high_miss_rate": 15,
+      "l2_warning_miss_rate": 19,
+      "l1_lint_failed": 10,
+      "l1_lint_error": 12
     },
     "output_path": "../data/sft_distill/validated_claude.jsonl"
   }
