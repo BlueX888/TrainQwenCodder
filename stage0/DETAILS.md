@@ -1,12 +1,10 @@
-# Stage 0（基础设施准备）——stage0/ 目录详细解释文档
+# Stage 0（基础设施准备）
 
 `stage0/` 是整个训练工程的“地基层”，目标是把后续阶段（SFT/GRPO/评估）依赖的三件事做成**可复现的离线产物**：
 
 1) **Phaser3 API 索引（JSONL）**：从 `phaser.d.ts` 提取结构化记录，用于 Prompt 注入与 API 弱校验  
 2) **Prompt 种子库（JSONL，≥2000）**：覆盖 Phaser3 核心模块与难度分布，为蒸馏/SFT/评估提供标准化任务输入  
 3) **代码验证器（validator）**：静态（Babel AST + ESLint + API index）+ 可选运行时（HEADLESS best-effort），输出结构化 JSON
-
-> 阶段零的“方法论、验收标准、推荐 schema”见根目录：`../阶段零-基础设施准备-详细实施文档.md`。本文聚焦解释 **stage0 当前实现**：文件组织、脚本行为、数据格式与常见坑位。
 
 ---
 
