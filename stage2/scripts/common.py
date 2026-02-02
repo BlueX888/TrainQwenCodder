@@ -43,7 +43,7 @@ def sha256_text(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8", errors="ignore")).hexdigest()
 
 
-_RE_FENCE = re.compile(r"^```(?:\\w+)?\\s*$")
+_RE_FENCE = re.compile(r"^```(?:\w+)?\s*$")
 
 
 def strip_markdown_fences(code: str) -> str:
@@ -60,24 +60,68 @@ def strip_markdown_fences(code: str) -> str:
 class Extracted:
     plan_raw: str
     code_raw: str
+    text: str
+
+
+_RE_PLAN_BLOCK = re.compile(r"\[PLAN\](.*?)\[/PLAN\]", flags=re.IGNORECASE | re.DOTALL)
+
+
+def _normalize_text(text: str) -> str:
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _extract_code_only(text: str) -> str:
+    s = _normalize_text(text)
+    if not s:
+        return ""
+    lower = s.lower()
+
+    code_idx = lower.find("code:")
+    if code_idx != -1:
+        code_part = s[code_idx + len("code:") :].strip()
+        return strip_markdown_fences(code_part)
+
+    fence_start = lower.find("```")
+    if fence_start != -1:
+        fence_end = lower.find("```", fence_start + 3)
+        if fence_end != -1:
+            code_block = s[fence_start : fence_end + 3]
+            return strip_markdown_fences(code_block)
+
+    return strip_markdown_fences(s)
 
 
 def extract_plan_code(text: str) -> Extracted:
-    s = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    """
+    Extract plan+code from model output.
+
+    Supported formats:
+    - [PLAN] ... [/PLAN] + ```javascript ... ```
+    - plan: ... code: ...
+    - fallback: first fenced code block
+    - last resort: treat whole output as code
+    """
+
+    s = _normalize_text(text)
     if not s:
-        return Extracted(plan_raw="", code_raw="")
+        return Extracted(plan_raw="", code_raw="", text="")
+
+    m = _RE_PLAN_BLOCK.search(s)
+    if m:
+        plan_raw = (m.group(1) or "").strip()
+        rest = (s[: m.start()] + "\n" + s[m.end() :]).strip()
+        code_raw = _extract_code_only(rest)
+        return Extracted(plan_raw=plan_raw, code_raw=code_raw, text=s)
 
     lower = s.lower()
     plan_idx = lower.find("plan:")
     code_idx = lower.find("code:")
-
     if plan_idx != -1 and code_idx != -1 and plan_idx < code_idx:
         plan_part = s[plan_idx + len("plan:") : code_idx].strip()
         code_part = s[code_idx + len("code:") :].strip()
-        return Extracted(plan_raw=plan_part, code_raw=strip_markdown_fences(code_part))
+        return Extracted(plan_raw=plan_part, code_raw=strip_markdown_fences(code_part), text=s)
 
-    # fallback: treat whole output as code
-    return Extracted(plan_raw="", code_raw=strip_markdown_fences(s))
+    return Extracted(plan_raw="", code_raw=_extract_code_only(s), text=s)
 
 
 def parse_plan_json(plan_raw: str) -> Tuple[Optional[Dict[str, Any]], str]:
@@ -93,42 +137,61 @@ def parse_plan_json(plan_raw: str) -> Tuple[Optional[Dict[str, Any]], str]:
     return None, raw
 
 
-def clamp01(x: float) -> float:
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return float(x)
+_RE_REQ = re.compile(r"^\s*(?:REQ|需求)\s*:\s*(.+?)\s*$", flags=re.IGNORECASE)
+_RE_API = re.compile(r"^\s*(?:API|APIS|接口)\s*:\s*(.+?)\s*$", flags=re.IGNORECASE)
+_RE_STEPS = re.compile(r"^\s*(?:STEPS|步骤)\s*:?\s*$", flags=re.IGNORECASE)
+_RE_STEP_LINE = re.compile(r"^\s*(?:\d+\.)\s*(.+?)\s*$")
 
 
-_RE_BLOCK_COMMENT = re.compile(r"/\\*.*?\\*/", re.DOTALL)
-_RE_LINE_COMMENT = re.compile(r"//.*?$", re.MULTILINE)
-_RE_WS = re.compile(r"\\s+")
+def parse_plan_text(plan_raw: str) -> Optional[Dict[str, Any]]:
+    raw = (plan_raw or "").strip()
+    if not raw:
+        return None
 
+    req: str = ""
+    apis: List[str] = []
+    steps: List[str] = []
+    in_steps = False
 
-def normalized_code_hash(code: str) -> str:
-    s = code or ""
-    s = _RE_BLOCK_COMMENT.sub("", s)
-    s = _RE_LINE_COMMENT.sub("", s)
-    s = _RE_WS.sub("", s)
-    return sha256_text(s)
-
-
-def non_empty_lines(code: str) -> int:
-    return sum(1 for ln in (code or "").splitlines() if ln.strip())
-
-
-def effective_code_ratio(code: str) -> float:
-    lines = (code or "").splitlines()
-    if not lines:
-        return 0.0
-    eff = 0
-    for ln in lines:
+    for ln in raw.splitlines():
         s = ln.strip()
         if not s:
             continue
-        if s.startswith("//"):
+
+        m = _RE_REQ.match(s)
+        if m:
+            req = m.group(1).strip()
+            in_steps = False
             continue
-        eff += 1
-    return eff / max(1, sum(1 for ln in lines if ln.strip()))
+
+        m = _RE_API.match(s)
+        if m:
+            in_steps = False
+            api_s = m.group(1)
+            parts = re.split(r"[,，、;；]\s*", api_s)
+            apis = [p.strip() for p in parts if p and p.strip()]
+            continue
+
+        if _RE_STEPS.match(s):
+            in_steps = True
+            continue
+
+        if in_steps:
+            sm = _RE_STEP_LINE.match(s)
+            if sm:
+                steps.append(sm.group(1).strip())
+            else:
+                # allow bullet-like continuation lines
+                if s.startswith("-") or s.startswith("*"):
+                    steps.append(s[1:].strip())
+
+    if not req and not apis and not steps:
+        return None
+
+    return {
+        "requirements": [req] if req else [],
+        "apis": apis,
+        "steps": steps,
+        "notes": "",
+    }
 

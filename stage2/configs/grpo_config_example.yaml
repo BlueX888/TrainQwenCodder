@@ -1,22 +1,13 @@
-# GRPO config (example)
-model_name_or_path: /path/to/sft_model
-ref_model_name_or_path: /path/to/sft_model  # or a frozen copy
+# Stage2 GRPO（奖励+rollout）示例配置
+# 说明：本仓库不内置“策略更新/训练器”，该配置主要用于：
+# - 约定 rollouts/prompts 路径
+# - 统一奖励与 validator 参数（便于复现实验）
 
-prompts_train: stage2/data/grpo/prompts_train.jsonl
-prompts_eval: stage2/data/grpo/prompts_eval.jsonl
+### Inputs
+prompts_path: stage2/data/grpo/prompts_train.jsonl
+rollouts_path: stage2/data/grpo/rollouts/mock_step0001.jsonl
 
-group_size: 8
-batch_prompts_per_step: 16
-max_new_tokens: 1800
-temperature: 0.7
-top_p: 0.9
-seed: 42
-
-# Reward
-reward_version: v0.1.0
-reward_plan_weight: 0.15
-reward_code_weight: 0.85
-runtime_crash_cap: 0.2
+### Validator (stage0)
 validator_cli: stage0/validator/src/cli.js
 api_index: stage0/data/api_index/phaser_api.jsonl
 timeout_ms: 1500
@@ -24,10 +15,34 @@ frames: 60
 skip_eslint: false
 skip_runtime: true
 
-# KL control
-target_kl: 0.10
-beta_init: 0.05
-beta_min: 0.005
-beta_max: 0.5
-beta_mul: 1.5
+### Reward weights (default aligns with doc: 0.15 plan + 0.85 code)
+reward:
+  version: v0
+  total:
+    plan_weight: 0.15
+    code_weight: 0.85
+  plan:
+    structure: 0.30
+    req_api: 0.20
+    consistency: 0.50
+  code:
+    functional: 0.30
+    api_accuracy: 0.25
+    runtime: 0.20
+    quality: 0.15
+    format: 0.10
+  gates:
+    parse_fail_zero_total: true
+    unsafe_zero_total: true
+    runtime_crash_cap: 0.20
+
+### GRPO advantage (group normalization)
+advantage:
+  eps: 1.0e-6
+  std_min: 1.0e-6
+
+### Outputs
+out_scored: stage2/data/grpo/rewards/mock_step0001_scored.jsonl
+out_cache: stage2/data/grpo/rewards/validator_cache.jsonl
+out_report: stage2/data/grpo/reports/mock_step0001_report.json
 

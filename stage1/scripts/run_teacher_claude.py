@@ -234,6 +234,11 @@ def run_claude_distill(
     client = Anthropic(api_key=api_key)
     logger.info(f"Using model: {model}")
 
+    # 确保输出文件存在
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    if not Path(output_path).exists():
+        Path(output_path).touch()
+
     # 检查点
     checkpoint = Checkpoint(checkpoint_path) if checkpoint_path else None
     if checkpoint:

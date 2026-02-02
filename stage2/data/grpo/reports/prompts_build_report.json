@@ -1,9 +1,0 @@
-{
-  "created_at": "2026-01-23T10:15:03.270530+00:00",
-  "prompt_seeds": "/Users/admin/Desktop/TrainQwenCodder/stage0/data/prompt_seeds/prompt_seeds.jsonl",
-  "train_out": "/Users/admin/Desktop/TrainQwenCodder/stage2/data/grpo/prompts_train.jsonl",
-  "eval_out": "/Users/admin/Desktop/TrainQwenCodder/stage2/data/grpo/prompts_eval.jsonl",
-  "train_count": 5,
-  "eval_count": 3,
-  "seed": 7
-}

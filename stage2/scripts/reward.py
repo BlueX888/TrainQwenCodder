@@ -3,465 +3,394 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from api_index import ApiIndex
-from common import clamp01, effective_code_ratio, extract_plan_code, non_empty_lines, normalized_code_hash, parse_plan_json
+from common import Extracted, extract_plan_code, parse_plan_json, parse_plan_text
 from must_use import derive_must_use_checks
-from validator_client import ValidatorConfig, validate_with_cache
+from validator_client import ValidatorConfig, load_cache, validate_with_cache
 
 
-REWARD_VERSION = "v0.1.0"
-
-
-CH2EN_HINTS = {
-    "场景": ["scene"],
-    "切场景": ["scene", "start"],
-    "物理": ["physics", "arcade"],
-    "重力": ["gravity"],
-    "碰撞": ["collider", "overlap", "collision"],
-    "输入": ["input"],
-    "鼠标": ["pointer"],
-    "触摸": ["pointer", "touch"],
-    "键盘": ["keyboard", "cursors", "keys", "space"],
-    "拖拽": ["drag"],
-    "动画": ["animation", "anims", "tween"],
-    "补间": ["tween"],
-    "粒子": ["particles", "emitter"],
-    "瓦片": ["tilemap"],
-    "地图": ["tilemap"],
-    "摄像机": ["camera"],
-    "文本": ["text"],
-    "精灵": ["sprite"],
-    "容器": ["container"],
-    "图形": ["graphics"],
-    "声音": ["sound", "audio"],
-    "跳跃": ["jump"],
-    "平台": ["platform"],
-    "收集": ["collect", "pickup", "score"],
+UNSAFE_ERROR_CODES = {
+    "banned_require",
+    "banned_import",
+    "banned_import_decl",
+    "new_function",
+    "eval",
 }
 
-_RE_TOKEN = re.compile(r"[^0-9a-zA-Z]+")
+
+STRUCTURE_KEYS_REQUIRED = ["has_new_phaser_game", "has_scene_in_config", "has_preload", "has_create"]
 
 
-def tokenize(s: str) -> Set[str]:
-    s = (s or "").lower()
-    s = _RE_TOKEN.sub(" ", s)
-    toks = [t for t in s.split() if t]
-    return set(toks)
+def clamp01(x: float) -> float:
+    return max(0.0, min(1.0, float(x)))
 
 
-def expand_prompt_keywords(prompt: Dict[str, Any]) -> Set[str]:
-    parts: List[str] = []
-    for k in ("task",):
-        v = prompt.get(k)
-        if isinstance(v, str) and v.strip():
-            parts.append(v.strip())
-    for k in ("constraints", "eval_hints", "tags", "modules"):
-        v = prompt.get(k)
-        if isinstance(v, list):
-            parts.extend(str(x) for x in v if x is not None)
-    text = "\n".join(parts)
-
-    out = set()
-    out |= tokenize(text)
-    for ch, en in CH2EN_HINTS.items():
-        if ch in text:
-            out |= set(en)
-    return out
-
-
-EVENT_EMITTER_METHODS = {"on", "once", "off", "emit", "addlistener", "removelistener"}
-
-
-def normalize_plan_api(api: str, api_index: ApiIndex) -> str:
-    s = api_index.normalize_token(api)
-    if not s:
-        return ""
-
-    # Normalize event emitter methods (often inherited)
-    if "#" in s:
-        owner, name = s.split("#", 1)
-        name_l = name.lower()
-        if name_l in EVENT_EMITTER_METHODS:
-            return f"Phaser.Events.EventEmitter#{name_l}"
-
-    # keep member strings as-is ("this.add.text")
-    return s
-
-
-def count_plan_fields(plan: Dict[str, Any]) -> Tuple[bool, bool, bool]:
-    req = plan.get("requirements")
-    apis = plan.get("apis")
-    steps = plan.get("steps")
-    has_req = isinstance(req, list) and len(req) > 0
-    has_apis = isinstance(apis, list) and len(apis) > 0
-    has_steps = isinstance(steps, list) and len(steps) > 0
-    return has_req, has_apis, has_steps
-
-
-def steps_min_for_difficulty(difficulty: str) -> int:
-    d = (difficulty or "").lower().strip()
-    if d == "easy":
-        return 2
-    return 3
-
-
-def structure_plan_score(plan: Dict[str, Any], difficulty: str) -> float:
-    has_req, has_apis, has_steps = count_plan_fields(plan)
-    score = 0.0
-    score += 1.0 if has_req else 0.0
-    score += 1.0 if has_apis else 0.0
-    if has_steps:
-        steps = plan.get("steps") or []
-        need = steps_min_for_difficulty(difficulty)
-        score += 1.0 if len(steps) >= need else max(0.0, len(steps) / max(1, need))
-    return clamp01(score / 3.0)
-
-
-def requirements_api_score(plan: Dict[str, Any], prompt: Dict[str, Any], api_index: ApiIndex) -> float:
-    apis = plan.get("apis")
-    if not isinstance(apis, list) or not apis:
+def safe_mean(xs: List[float]) -> float:
+    if not xs:
         return 0.0
-
-    normalized = [normalize_plan_api(str(a), api_index) for a in apis]
-    normalized = [a for a in normalized if a]
-    if not normalized:
-        return 0.0
-
-    exist = 0
-    api_tokens = set()
-    for a in normalized:
-        api_tokens |= tokenize(a)
-        if a.startswith("this."):
-            # allow "this.*" as a reference; existence will be checked in plan-code consistency
-            exist += 1
-            continue
-        if api_index.exists(a):
-            exist += 1
-    exist_ratio = exist / len(normalized)
-
-    prompt_tokens = expand_prompt_keywords(prompt)
-    overlap = len(prompt_tokens & api_tokens) / max(1, len(prompt_tokens))
-    overlap_score = clamp01(overlap * 3.0)  # amplify small overlaps
-
-    return clamp01(0.7 * exist_ratio + 0.3 * overlap_score)
+    return float(sum(xs)) / float(len(xs))
 
 
-def extract_lifecycle_mentions(steps: List[Any]) -> Set[str]:
-    text = " ".join(str(s) for s in steps if s is not None).lower()
-    out = set()
-    for k in ("preload", "create", "update"):
-        if k in text:
-            out.add(k)
-    return out
-
-
-def plan_code_consistency_score(plan: Dict[str, Any], code: str, validator: Dict[str, Any], api_index: ApiIndex) -> float:
-    apis = plan.get("apis")
-    if not isinstance(apis, list) or not apis:
-        return 0.0
-
-    plan_set: Set[str] = set()
-    for a in apis:
-        s = normalize_plan_api(str(a), api_index)
-        if not s:
-            continue
-        plan_set.add(s)
-
-    hits = validator.get("api_usage", {}).get("hits") or []
-    hit_ids = {str(h.get("symbol_id", "")) for h in hits if isinstance(h, dict)}
-
-    # Forward: plan apis should appear in code (via hits or raw substring).
-    forward_total = 0
-    forward_hit = 0
-    for a in plan_set:
-        if not a:
-            continue
-        # only enforce for Phaser.* tokens and this.* tokens
-        if not (a.startswith("Phaser.") or a.startswith("this.")):
-            continue
-        forward_total += 1
-        if a in hit_ids or (a in (code or "")):
-            forward_hit += 1
-    forward = 1.0 if forward_total == 0 else (forward_hit / forward_total)
-
-    # Reverse: top code APIs should be mentioned in plan.
-    core_hits = [hid for hid in hit_ids if hid and hid != "Phaser.Game"]
-    core_hits.sort()
-    core_hits = core_hits[:5]
-    reverse_total = len(core_hits)
-    reverse_hit = sum(1 for hid in core_hits if hid in plan_set)
-    reverse = 1.0 if reverse_total == 0 else (reverse_hit / reverse_total)
-
-    # Steps mapping: if plan mentions lifecycle, code should include those.
-    steps = plan.get("steps") or []
-    mentions = extract_lifecycle_mentions(steps if isinstance(steps, list) else [])
-    signals = validator.get("signals") or {}
-    need_total = len(mentions)
-    need_hit = 0
-    if "preload" in mentions and signals.get("has_preload", False):
-        need_hit += 1
-    if "create" in mentions and signals.get("has_create", False):
-        need_hit += 1
-    if "update" in mentions and signals.get("has_update", False):
-        need_hit += 1
-    steps_score = 1.0 if need_total == 0 else (need_hit / need_total)
-
-    return clamp01(0.4 * forward + 0.4 * reverse + 0.2 * steps_score)
-
-
-def code_bounds(difficulty: str) -> Tuple[int, int]:
-    d = (difficulty or "").lower().strip()
-    if d == "easy":
-        return 10, 220
-    if d == "hard":
-        return 30, 420
-    return 20, 320
-
-
-def min_api_hits(difficulty: str) -> int:
-    d = (difficulty or "").lower().strip()
-    if d == "easy":
-        return 2
-    if d == "hard":
-        return 6
-    return 4
-
-
-def is_unsafe_error(errors: List[Any]) -> bool:
+def is_unsafe(errors: Any) -> bool:
+    if not isinstance(errors, list):
+        return False
     for e in errors:
         if not isinstance(e, dict):
             continue
         code = str(e.get("code", "")).strip()
-        if code in ("eval", "new_function"):
-            return True
-        if code.startswith("banned_"):
+        if code in UNSAFE_ERROR_CODES:
             return True
     return False
 
 
-def format_code_score(code: str, validator: Dict[str, Any], difficulty: str) -> float:
-    code_s = code or ""
-    if "```" in code_s:
-        return 0.0
-
-    signals = validator.get("signals") or {}
-    need = ["has_new_phaser_game", "has_scene_in_config", "has_preload", "has_create"]
-    ok = sum(1 for k in need if signals.get(k, False))
-    base = ok / len(need)
-
-    # length bounds penalty
-    lo, hi = code_bounds(difficulty)
-    lines = non_empty_lines(code_s)
-    if lines < lo:
-        base *= max(0.0, lines / max(1, lo))
-    if lines > hi:
-        base *= max(0.0, hi / max(1, lines))
-
-    # effective code ratio penalty
-    ratio = effective_code_ratio(code_s)
-    if ratio < 0.7:
-        base *= ratio / 0.7
-
-    # minimum API hits penalty (exclude Phaser.Game)
-    hits = validator.get("api_usage", {}).get("hits") or []
-    hit_ids = [h.get("symbol_id") for h in hits if isinstance(h, dict)]
-    hit_core = [x for x in hit_ids if isinstance(x, str) and x and x != "Phaser.Game"]
-    if len(hit_core) < min_api_hits(difficulty):
-        base *= len(hit_core) / max(1, min_api_hits(difficulty))
-
-    return clamp01(base)
+def norm_diff(d: Any) -> str:
+    s = str(d or "").lower().strip()
+    if s in ("easy", "medium", "hard"):
+        return s
+    return "medium"
 
 
-def code_quality_score(validator: Dict[str, Any], skip_eslint: bool) -> float:
-    if skip_eslint:
-        return 1.0
-    if not validator.get("lint_ok", False):
-        return 0.0
-    warns = validator.get("warnings") or []
-    # only count eslint-related warnings
-    w = 0
-    for item in warns:
-        if not isinstance(item, dict):
-            continue
-        code = str(item.get("code", "")).strip()
-        if code in ("api_index_loaded", "api_index_missing", "runtime_failed"):
-            continue
-        w += 1
-    return clamp01(1.0 - min(0.5, w * 0.02))
-
-
-def api_accuracy_score(validator: Dict[str, Any]) -> float:
+def api_accuracy(validator: Dict[str, Any]) -> float:
     usage = validator.get("api_usage") or {}
     hits = usage.get("hits") or []
     misses = usage.get("misses") or []
     h = len(hits) if isinstance(hits, list) else 0
     m = len(misses) if isinstance(misses, list) else 0
-    if h + m == 0:
-        return 0.0
-    return clamp01(1.0 - min(1.0, m / (h + m + 1.0)))
+    if (h + m) == 0:
+        return 1.0 if bool(validator.get("api_ok", False)) else 0.0
+    return clamp01(h / (h + m))
 
 
-def functional_score(validator: Dict[str, Any], must_use_checks: List[str], difficulty: str) -> float:
+def must_use_hit_rate(validator: Dict[str, Any], must_use_checks: List[str]) -> float:
     usage = validator.get("api_usage") or {}
     must_misses = usage.get("must_use_misses") or []
     if not isinstance(must_misses, list):
         must_misses = []
-    total = max(1, len(must_use_checks))
-    must_ratio = 1.0 - (len(must_misses) / total)
-
-    signals = validator.get("signals") or {}
-    need = ["has_new_phaser_game", "has_scene_in_config", "has_preload", "has_create"]
-    got = sum(1 for k in need if signals.get(k, False))
-    structure = got / len(need)
-    return clamp01(0.6 * must_ratio + 0.4 * structure)
+    denom = max(1, len(must_use_checks))
+    return clamp01(1.0 - (len(must_misses) / denom))
 
 
-def runtime_score(validator: Dict[str, Any], skip_runtime: bool) -> float:
-    if skip_runtime:
-        return 1.0
-    return 1.0 if validator.get("runtime_ok", False) else 0.0
+def structure_score(signals: Any) -> float:
+    if not isinstance(signals, dict):
+        return 0.0
+    base = safe_mean([1.0 if bool(signals.get(k, False)) else 0.0 for k in STRUCTURE_KEYS_REQUIRED])
+    bonus = 0.2 if bool(signals.get("has_update", False)) else 0.0
+    return clamp01(base + bonus)
+
+
+def format_score(code: str, signals: Any) -> float:
+    if not code or not str(code).strip():
+        return 0.0
+    if not isinstance(signals, dict) or not bool(signals.get("has_new_phaser_game", False)):
+        return 0.0
+    lines = [ln for ln in str(code).splitlines() if ln.strip()]
+    # Encourage "not too short" code; saturate at 20 lines.
+    return clamp01(len(lines) / 20.0)
+
+
+def normalize_plan_obj(plan_obj: Dict[str, Any]) -> Dict[str, Any]:
+    reqs = plan_obj.get("requirements")
+    if reqs is None:
+        reqs = plan_obj.get("req")
+    apis = plan_obj.get("apis")
+    if apis is None:
+        apis = plan_obj.get("api")
+    steps = plan_obj.get("steps")
+
+    def to_list_str(x: Any) -> List[str]:
+        if x is None:
+            return []
+        if isinstance(x, str):
+            s = x.strip()
+            return [s] if s else []
+        if isinstance(x, list):
+            out: List[str] = []
+            for it in x:
+                s = str(it).strip()
+                if s:
+                    out.append(s)
+            return out
+        return [str(x).strip()] if str(x).strip() else []
+
+    return {
+        "requirements": to_list_str(reqs),
+        "apis": to_list_str(apis),
+        "steps": to_list_str(steps),
+        "notes": str(plan_obj.get("notes", "") or "").strip(),
+    }
+
+
+def plan_structure_score(plan_obj: Dict[str, Any], difficulty: str) -> float:
+    reqs = plan_obj.get("requirements") or []
+    apis = plan_obj.get("apis") or []
+    steps = plan_obj.get("steps") or []
+
+    req_ok = len(reqs) > 0 and bool(str(reqs[0]).strip())
+    apis_ok = len(apis) > 0
+    need_steps = 2 if norm_diff(difficulty) == "easy" else 3
+    steps_ok = len(steps) >= need_steps
+
+    return safe_mean([1.0 if req_ok else 0.0, 1.0 if apis_ok else 0.0, 1.0 if steps_ok else 0.0])
+
+
+def plan_consistency_score(plan_obj: Dict[str, Any], code: str, signals: Any) -> float:
+    apis = plan_obj.get("apis") or []
+    code_s = str(code or "")
+    code_lower = code_s.lower()
+
+    hit = 0
+    for a in apis:
+        tok = str(a).strip()
+        if not tok:
+            continue
+        candidates = [tok]
+        if "#" in tok:
+            candidates.append(tok.split("#", 1)[1])
+        if "." in tok:
+            candidates.append(tok.split(".")[-1])
+        # Also allow stripping common "Phaser." prefix.
+        if tok.startswith("Phaser."):
+            candidates.append(tok[len("Phaser.") :])
+        ok = False
+        for c in candidates:
+            c = str(c).strip()
+            if not c or len(c) < 3:
+                continue
+            if c.lower() in code_lower:
+                ok = True
+                break
+        if ok:
+            hit += 1
+
+    api_hit_rate = (hit / len(apis)) if apis else 0.0
+
+    # Lifecycle hints in steps -> check AST signals (best-effort).
+    steps_text = "\n".join([str(x) for x in (plan_obj.get("steps") or [])]).lower()
+    want_preload = "preload" in steps_text
+    want_create = "create" in steps_text
+    want_update = "update" in steps_text
+
+    life_checks: List[float] = []
+    if isinstance(signals, dict):
+        if want_preload:
+            life_checks.append(1.0 if bool(signals.get("has_preload", False)) else 0.0)
+        if want_create:
+            life_checks.append(1.0 if bool(signals.get("has_create", False)) else 0.0)
+        if want_update:
+            life_checks.append(1.0 if bool(signals.get("has_update", False)) else 0.0)
+
+    lifecycle_score = safe_mean(life_checks) if life_checks else 1.0
+    return clamp01(0.7 * api_hit_rate + 0.3 * lifecycle_score)
 
 
 @dataclass
 class RewardConfig:
+    version: str = "v0"
     plan_weight: float = 0.15
     code_weight: float = 0.85
-    runtime_crash_cap: float = 0.2
 
-    # code sub-weights (must sum to 1.0)
-    w_functional: float = 0.30
-    w_api: float = 0.25
-    w_runtime: float = 0.20
-    w_quality: float = 0.15
-    w_format: float = 0.10
+    # Plan components
+    plan_w_structure: float = 0.30
+    plan_w_req_api: float = 0.20
+    plan_w_consistency: float = 0.50
+
+    # Code components
+    code_w_functional: float = 0.30
+    code_w_api: float = 0.25
+    code_w_runtime: float = 0.20
+    code_w_quality: float = 0.15
+    code_w_format: float = 0.10
+
+    # Gates
+    parse_fail_zero_total: bool = True
+    unsafe_zero_total: bool = True
+    runtime_crash_cap: float = 0.20
 
 
 def compute_reward(
     *,
     prompt: Dict[str, Any],
-    text: str,
-    api_index: ApiIndex,
-    validator_cfg: ValidatorConfig,
-    reward_cfg: RewardConfig,
-    cache: Dict[str, Dict[str, Any]],
-    cache_path: Optional[Path],
-    code_dir: Optional[Path],
-    save_codes: bool,
-    meta: Dict[str, Any],
+    extracted: Extracted,
+    plan_obj: Optional[Dict[str, Any]],
+    validator: Dict[str, Any],
+    cfg: RewardConfig,
+    skip_eslint: bool,
+    skip_runtime: bool,
 ) -> Dict[str, Any]:
-    extracted = extract_plan_code(text)
-    plan_obj, plan_raw = parse_plan_json(extracted.plan_raw)
-    code = extracted.code_raw
+    difficulty = norm_diff(prompt.get("difficulty"))
+    signals = validator.get("signals") or {}
 
-    difficulty = str(prompt.get("difficulty", "medium")).lower().strip()
+    parse_ok = bool(validator.get("parse_ok", False))
+    unsafe = bool(is_unsafe(validator.get("errors") or []))
+    lint_ok = True if skip_eslint else bool(validator.get("lint_ok", False))
+    runtime_ok = True if skip_runtime else bool(validator.get("runtime_ok", False))
+
+    # --- Plan reward ---
+    plan_score = 0.0
+    plan_components = {"structure": 0.0, "req_api": 0.0, "consistency": 0.0}
+    plan_present = False
+    if isinstance(plan_obj, dict):
+        plan_present = True
+        plan_norm = normalize_plan_obj(plan_obj)
+        ps = plan_structure_score(plan_norm, difficulty=difficulty)
+        pr = 1.0 if (plan_norm.get("requirements") and plan_norm.get("apis")) else 0.0
+        pc = plan_consistency_score(plan_norm, extracted.code_raw, signals=signals)
+        plan_components = {"structure": ps, "req_api": pr, "consistency": pc}
+        plan_score = (
+            cfg.plan_w_structure * ps + cfg.plan_w_req_api * pr + cfg.plan_w_consistency * pc
+        )
+        plan_score = clamp01(plan_score)
+
+    # --- Code reward ---
+    code_components = {"functional": 0.0, "api_accuracy": 0.0, "runtime": 0.0, "quality": 0.0, "format": 0.0}
+    code_score = 0.0
+    if parse_ok and not unsafe:
+        s_struct = structure_score(signals)
+        must_use_raw = prompt.get("must_use_apis") or []
+        must_use_raw = [str(x) for x in must_use_raw if x is not None]
+        must_use_checks = derive_must_use_checks(must_use_raw)
+        s_must = must_use_hit_rate(validator, must_use_checks)
+        s_func = 0.5 * s_struct + 0.5 * s_must
+        s_api = api_accuracy(validator)
+        s_rt = 1.0 if runtime_ok else 0.0
+        s_q = 1.0 if lint_ok else 0.0
+        s_fmt = format_score(extracted.code_raw, signals)
+
+        code_components = {
+            "functional": clamp01(s_func),
+            "api_accuracy": clamp01(s_api),
+            "runtime": clamp01(s_rt),
+            "quality": clamp01(s_q),
+            "format": clamp01(s_fmt),
+        }
+        code_score = (
+            cfg.code_w_functional * code_components["functional"]
+            + cfg.code_w_api * code_components["api_accuracy"]
+            + cfg.code_w_runtime * code_components["runtime"]
+            + cfg.code_w_quality * code_components["quality"]
+            + cfg.code_w_format * code_components["format"]
+        )
+        code_score = clamp01(code_score)
+        if not skip_runtime and not runtime_ok:
+            code_score = min(code_score, float(cfg.runtime_crash_cap))
+
+    # --- Total ---
+    total = clamp01(cfg.plan_weight * plan_score + cfg.code_weight * code_score)
+    if cfg.parse_fail_zero_total and not parse_ok:
+        total = 0.0
+    if cfg.unsafe_zero_total and unsafe:
+        total = 0.0
+
+    return {
+        "version": cfg.version,
+        "total": float(total),
+        "plan": {
+            "present": bool(plan_present),
+            "score": float(plan_score),
+            "components": plan_components,
+            "weights": {"structure": cfg.plan_w_structure, "req_api": cfg.plan_w_req_api, "consistency": cfg.plan_w_consistency},
+        },
+        "code": {
+            "score": float(code_score),
+            "components": code_components,
+            "weights": {
+                "functional": cfg.code_w_functional,
+                "api_accuracy": cfg.code_w_api,
+                "runtime": cfg.code_w_runtime,
+                "quality": cfg.code_w_quality,
+                "format": cfg.code_w_format,
+            },
+        },
+        "gates": {
+            "parse_ok": bool(parse_ok),
+            "unsafe": bool(unsafe),
+            "lint_ok": bool(lint_ok),
+            "runtime_ok": bool(runtime_ok),
+        },
+    }
+
+
+def load_prompt_by_id(prompt_jsonl: Path, prompt_id: str) -> Dict[str, Any]:
+    for r in prompt_jsonl.open("r", encoding="utf-8"):
+        s = r.strip()
+        if not s:
+            continue
+        obj = json.loads(s)
+        if str(obj.get("id", "")).strip() == prompt_id:
+            return obj
+    raise SystemExit(f"prompt_id not found: {prompt_id}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--prompt-seeds", default="stage0/data/prompt_seeds/prompt_seeds.jsonl")
+    ap.add_argument("--prompt-id", required=True)
+    ap.add_argument("--text-file", required=True)
+    ap.add_argument("--validator-cli", default="stage0/validator/src/cli.js")
+    ap.add_argument("--api-index", default="stage0/data/api_index/phaser_api.jsonl")
+    ap.add_argument("--cache", default="stage2/data/grpo/rewards/validator_cache.jsonl")
+    ap.add_argument("--skip-eslint", action="store_true")
+    ap.add_argument("--skip-runtime", action="store_true")
+    args = ap.parse_args()
+
+    prompt = load_prompt_by_id(Path(args.prompt_seeds), str(args.prompt_id))
+    text = Path(args.text_file).read_text(encoding="utf-8")
+    extracted = extract_plan_code(text)
+
+    plan_obj, _ = parse_plan_json(extracted.plan_raw)
+    if plan_obj is None:
+        plan_obj = parse_plan_text(extracted.plan_raw)
+
     must_use_raw = prompt.get("must_use_apis") or []
     must_use_raw = [str(x) for x in must_use_raw if x is not None]
     must_use_checks = derive_must_use_checks(must_use_raw)
 
+    cfg_v = ValidatorConfig(
+        validator_cli=Path(args.validator_cli),
+        api_index=Path(args.api_index),
+        skip_eslint=bool(args.skip_eslint),
+        skip_runtime=bool(args.skip_runtime),
+    )
+    cache_path = Path(args.cache) if args.cache else None
+    cache = load_cache(cache_path)
     vres = validate_with_cache(
-        cfg=validator_cfg,
-        code=code,
+        cfg=cfg_v,
+        code=extracted.code_raw,
         must_use_checks=must_use_checks,
         cache_path=cache_path,
-        code_dir=code_dir,
-        save_codes=save_codes,
+        code_dir=None,
+        save_codes=False,
         cache=cache,
-        meta=meta,
+        meta={"tool": "reward.py"},
     )
-    validator = vres["validator"]
 
-    gates = {
-        "reward_version": REWARD_VERSION,
-        "plan_valid": plan_obj is not None,
-        "parse_ok": bool(validator.get("parse_ok", False)),
-        "unsafe": is_unsafe_error(validator.get("errors") or []),
-        "runtime_evaluated": not bool(validator_cfg.skip_runtime),
-        "runtime_ok": bool(validator.get("runtime_ok", False)),
-    }
-
-    # Plan reward
-    if plan_obj is None:
-        r_plan = 0.0
-        plan_detail = {"score": 0.0, "components": {"structure": 0.0, "req_api": 0.0, "plan_code": 0.0}}
-        plan_apis_norm = []
-    else:
-        s_structure = structure_plan_score(plan_obj, difficulty)
-        s_req_api = requirements_api_score(plan_obj, prompt, api_index)
-        s_plan_code = plan_code_consistency_score(plan_obj, code, validator, api_index)
-        r_plan = clamp01(0.3 * s_structure + 0.2 * s_req_api + 0.5 * s_plan_code)
-        plan_detail = {"score": r_plan, "components": {"structure": s_structure, "req_api": s_req_api, "plan_code": s_plan_code}}
-        apis = plan_obj.get("apis") if isinstance(plan_obj.get("apis"), list) else []
-        plan_apis_norm = [normalize_plan_api(str(a), api_index) for a in apis]
-
-    # Code reward with gates
-    if not gates["parse_ok"] or gates["unsafe"]:
-        r_code = 0.0
-        code_detail = {
-            "score": 0.0,
-            "components": {"functional": 0.0, "api": 0.0, "runtime": 0.0, "quality": 0.0, "format": 0.0},
-        }
-    else:
-        s_func = functional_score(validator, must_use_checks, difficulty)
-        s_api = api_accuracy_score(validator)
-        s_run = runtime_score(validator, bool(validator_cfg.skip_runtime))
-        s_qual = code_quality_score(validator, bool(validator_cfg.skip_eslint))
-        s_fmt = format_code_score(code, validator, difficulty)
-
-        code_cfg_sum = reward_cfg.w_functional + reward_cfg.w_api + reward_cfg.w_runtime + reward_cfg.w_quality + reward_cfg.w_format
-        if abs(code_cfg_sum - 1.0) > 1e-6:
-            # Renormalize defensively
-            wf = reward_cfg.w_functional / code_cfg_sum
-            wa = reward_cfg.w_api / code_cfg_sum
-            wr = reward_cfg.w_runtime / code_cfg_sum
-            wq = reward_cfg.w_quality / code_cfg_sum
-            wfm = reward_cfg.w_format / code_cfg_sum
-        else:
-            wf, wa, wr, wq, wfm = (
-                reward_cfg.w_functional,
-                reward_cfg.w_api,
-                reward_cfg.w_runtime,
-                reward_cfg.w_quality,
-                reward_cfg.w_format,
-            )
-
-        r_code = clamp01(wf * s_func + wa * s_api + wr * s_run + wq * s_qual + wfm * s_fmt)
-
-        # runtime crash cap
-        if gates["runtime_evaluated"] and not gates["runtime_ok"]:
-            r_code = min(r_code, float(reward_cfg.runtime_crash_cap))
-
-        code_detail = {"score": r_code, "components": {"functional": s_func, "api": s_api, "runtime": s_run, "quality": s_qual, "format": s_fmt}}
-
-    total = clamp01(reward_cfg.plan_weight * r_plan + reward_cfg.code_weight * r_code)
-
-    # Extra debug fields helpful for rollout analysis.
-    reward = {
-        "version": REWARD_VERSION,
-        "total": total,
-        "plan": plan_detail,
-        "code": code_detail,
-        "gates": gates,
-        "debug": {
-            "code_hash": vres["code_hash"],
-            "norm_code_hash": normalized_code_hash(code),
-            "must_use_raw": must_use_raw,
-            "must_use_checks": must_use_checks,
-            "plan_apis_norm": plan_apis_norm,
-        },
-    }
-
-    return {
-        "text": text,
+    reward = compute_reward(
+        prompt=prompt,
+        extracted=extracted,
+        plan_obj=plan_obj,
+        validator=vres["validator"],
+        cfg=RewardConfig(),
+        skip_eslint=bool(args.skip_eslint),
+        skip_runtime=bool(args.skip_runtime),
+    )
+    out = {
+        "prompt_id": str(args.prompt_id),
+        "plan_raw": extracted.plan_raw,
         "plan": plan_obj,
-        "plan_raw": plan_raw,
-        "code": code,
-        "validation": validator,
+        "code": extracted.code_raw,
+        "validation": vres["validator"],
         "reward": reward,
     }
+    print(json.dumps(out, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+
