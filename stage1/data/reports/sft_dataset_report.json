@@ -1,26 +1,26 @@
 {
   "name": "sft_dataset",
-  "timestamp": "2026-01-27T17:58:32.032597",
-  "total": 64,
-  "passed": 64,
+  "timestamp": "2026-01-30T11:39:54.400232",
+  "total": 5,
+  "passed": 5,
   "failed": 0,
   "pass_rate": 100.0,
   "details": {
-    "distill_count": 64,
+    "distill_count": 5,
     "official_count": 0,
-    "after_dedup": 64,
-    "train_count": 58,
-    "val_count": 3,
-    "test_count": 3,
-    "train_ratio": 90.62,
-    "val_ratio": 4.69,
-    "test_ratio": 4.69,
+    "after_dedup": 5,
+    "train_count": 3,
+    "val_count": 1,
+    "test_count": 1,
+    "train_ratio": 60.0,
+    "val_ratio": 20.0,
+    "test_ratio": 20.0,
     "difficulty_distribution": {
-      "easy": 64
+      "easy": 5
     },
     "source_distribution": {
-      "distill": 64
+      "distill": 5
     },
-    "output_dir": "../data/sft_dataset_160"
+    "output_dir": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_dataset"
   }
 }

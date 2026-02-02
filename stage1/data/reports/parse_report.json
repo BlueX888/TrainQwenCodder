@@ -1,16 +1,16 @@
 {
   "name": "parse_teacher_outputs",
-  "timestamp": "2026-01-27T17:51:07.716790",
-  "total": 160,
-  "passed": 160,
+  "timestamp": "2026-01-30T11:23:12.936170",
+  "total": 660,
+  "passed": 660,
   "failed": 0,
   "pass_rate": 100.0,
   "details": {
-    "plan_parsed": 160,
-    "code_parsed": 160,
-    "validation_passed": 160,
+    "plan_parsed": 660,
+    "code_parsed": 660,
+    "validation_passed": 660,
     "error_distribution": {},
     "parse_rate": 100.0,
-    "output_path": "../data/sft_distill/candidates_claude.jsonl"
+    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/candidates.jsonl"
   }
 }
