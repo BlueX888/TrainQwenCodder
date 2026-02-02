@@ -12,18 +12,29 @@ import subprocess
 import json
 import argparse
 import tempfile
+import sys
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from common import (
     read_jsonl, write_jsonl, write_json, append_jsonl,
-    get_data_path, get_reports_path, get_stage0_path, ensure_dir,
+    get_data_path, get_reports_path, get_stage0_path, get_project_root, ensure_dir,
     get_logger, generate_report_summary, print_progress,
     compute_hash, JsonlCache
 )
 
 logger = get_logger(__name__)
+
+# must_use 映射：把 prompt 里的高层 API（类名）转成 validator 可命中的符号 ID（工厂方法等）。
+try:
+    project_root = get_project_root()
+    sys.path.insert(0, str(project_root))
+    from stage2.scripts.must_use import derive_must_use_checks  # type: ignore
+except Exception:
+    def derive_must_use_checks(must_use_apis: List[str]) -> List[str]:  # type: ignore
+        return [str(x).strip() for x in (must_use_apis or []) if str(x).strip()]
+
 
 # Validator CLI 路径
 VALIDATOR_CLI = get_stage0_path('validator/src/cli.js')
@@ -162,7 +173,7 @@ def check_l2(validator_result: dict, prompt: dict) -> Tuple[bool, List[str]]:
     L2: API 语义与领域知识验证
 
     - API 存在性：misses 占比 ≤ 20%
-    - must_use 命中率 ≥ 80% (TEMPORARILY DISABLED)
+    - must_use 命中率 ≥ 80%
     """
     issues = []
 
@@ -179,23 +190,21 @@ def check_l2(validator_result: dict, prompt: dict) -> Tuple[bool, List[str]]:
         elif miss_rate >= 0.1:
             issues.append(f'l2_warning_miss_rate:{miss_rate:.2f}')  # warning 不导致失败
 
-    # TEMPORARILY SKIP must_use check
-    # TODO: Re-enable after adding factory→class mapping to validator
-    # The issue is that must_use_apis contains class names (e.g., Phaser.GameObjects.Graphics)
-    # but generated code uses factory methods (e.g., this.add.graphics()) which don't match.
-    # must_use_apis = prompt.get('must_use_apis', [])
-    # if must_use_apis:
-    #     must_use_hits = api_usage.get('must_use_hits', [])
-    #     must_use_misses = api_usage.get('must_use_misses', [])
-    #     hit_rate = len(must_use_hits) / len(must_use_apis) if must_use_apis else 1.0
-    #
-    #     if hit_rate < 0.8:
-    #         issues.append(f'l2_must_use_miss:{",".join(must_use_misses[:3])}')
+    must_use_raw = prompt.get('must_use_apis', []) or []
+    must_use_raw = [str(x) for x in must_use_raw if x is not None]
+    must_use_checks = derive_must_use_checks(must_use_raw)
+    if must_use_checks:
+        must_use_hits = api_usage.get('must_use_hits', []) or []
+        must_use_misses = api_usage.get('must_use_misses', []) or []
+        hit_rate = len(must_use_hits) / len(must_use_checks) if must_use_checks else 1.0
+
+        if hit_rate < 0.8:
+            issues.append(f'l2_must_use_miss:{",".join(must_use_misses[:3])}')
 
     # 判断是否通过 (only check miss_rate now)
     passed = True
     for issue in issues:
-        if 'l2_high_miss_rate' in issue:
+        if 'l2_high_miss_rate' in issue or 'l2_must_use_miss' in issue:
             passed = False
             break
 
@@ -322,9 +331,25 @@ def validate_candidate(
     code = candidate.get('code', '')
     code_hash = compute_hash(code) if code else ''
 
+    prompt = candidate.get('prompt', {})
+    must_use_raw = prompt.get('must_use_apis', []) or []
+    must_use_raw = [str(x) for x in must_use_raw if x is not None]
+    must_use_checks = derive_must_use_checks(must_use_raw)
+    cache_key = compute_hash(
+        json.dumps(
+            {
+                "code_hash": code_hash,
+                "must_use_checks": must_use_checks,
+                "skip_runtime": bool(skip_runtime),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+
     # 检查缓存
-    if cache and cache.has(code_hash):
-        cached = cache.get(code_hash)
+    if cache and cache.has(cache_key):
+        cached = cache.get(cache_key)
         candidate['validator_result'] = cached.get('validator_result', {})
         candidate['l1_passed'] = cached.get('l1_passed', False)
         candidate['l2_passed'] = cached.get('l2_passed', False)
@@ -341,10 +366,10 @@ def validate_candidate(
         code_path.write_text(code, encoding='utf-8')
 
     # 构建 prompt_json
-    prompt = candidate.get('prompt', {})
     prompt_json = json.dumps({
-        'must_use_apis': prompt.get('must_use_apis', [])
-    })
+        'must_use_apis': must_use_checks
+    }, ensure_ascii=False)
+    candidate['must_use_checks'] = must_use_checks
 
     # 调用 validator
     validator_result = call_validator(
@@ -378,7 +403,10 @@ def validate_candidate(
 
     # 缓存结果
     if cache:
-        cache.set(code_hash, {
+        cache.set(cache_key, {
+            'code_hash': code_hash,
+            'must_use_checks': must_use_checks,
+            'skip_runtime': bool(skip_runtime),
             'validator_result': validator_result,
             'l1_passed': l1_passed,
             'l2_passed': l2_passed,
@@ -422,7 +450,7 @@ def run_filter_pipeline(
     codes_dir = codes_dir or str(get_data_path('sft_distill/codes'))
     ensure_dir(codes_dir)
 
-    cache = JsonlCache(cache_path, key_field='code_hash') if cache_path else None
+    cache = JsonlCache(cache_path, key_field='cache_key') if cache_path else None
     if cache:
         logger.info(f"Loaded {len(cache)} cached results")
 

@@ -210,6 +210,11 @@ class JsonlCache:
     def __len__(self) -> int:
         return len(self._cache)
 
+    def __bool__(self) -> bool:
+        # Treat an initialized cache as truthy even when empty.
+        # This keeps "if cache:" patterns working as intended.
+        return True
+
 
 # ============ 检查点 ============
 
