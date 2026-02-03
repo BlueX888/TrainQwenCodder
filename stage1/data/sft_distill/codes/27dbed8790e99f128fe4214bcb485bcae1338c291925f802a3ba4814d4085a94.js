@@ -1,0 +1,61 @@
+const config = {
+  type: Phaser.AUTO,
+  width: 800,
+  height: 600,
+  backgroundColor: '#2d2d2d',
+  scene: {
+    preload: preload,
+    create: create
+  }
+};
+
+function preload() {
+  // 不需要加载外部资源
+}
+
+function create() {
+  // 使用 Graphics 绘制粉色六边形
+  const graphics = this.add.graphics();
+  
+  // 设置粉色填充
+  graphics.fillStyle(0xff69b4, 1);
+  
+  // 绘制六边形
+  const hexagonRadius = 40;
+  const centerX = 50;
+  const centerY = 50;
+  
+  graphics.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i;
+    const x = centerX + hexagonRadius * Math.cos(angle);
+    const y = centerY + hexagonRadius * Math.sin(angle);
+    
+    if (i === 0) {
+      graphics.moveTo(x, y);
+    } else {
+      graphics.lineTo(x, y);
+    }
+  }
+  graphics.closePath();
+  graphics.fillPath();
+  
+  // 生成纹理
+  graphics.generateTexture('hexagon', 100, 100);
+  graphics.destroy();
+  
+  // 创建精灵对象
+  const hexagonSprite = this.add.sprite(100, 300, 'hexagon');
+  
+  // 创建补间动画：从左到右移动，然后往返循环
+  this.tweens.add({
+    targets: hexagonSprite,
+    x: 700, // 移动到右侧
+    duration: 2500, // 2.5 秒
+    ease: 'Linear',
+    yoyo: true, // 往返效果
+    loop: -1 // 无限循环
+  });
+}
+
+new Phaser.Game(config);

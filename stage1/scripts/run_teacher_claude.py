@@ -4,9 +4,12 @@
 使用 Claude API 进行真实的教师蒸馏，生成高质量 Phaser3 代码。
 """
 
+import json
 import os
 import time
 import argparse
+import threading
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
@@ -19,12 +22,47 @@ except ImportError:
     exit(1)
 
 from common import (
-    read_jsonl, append_jsonl,
+    read_jsonl, iter_jsonl, append_jsonl,
     get_data_path, get_stage1_root,
     get_logger, print_progress, Checkpoint
 )
 
 logger = get_logger(__name__)
+
+_thread_local = threading.local()
+
+
+def get_thread_client(api_key: str) -> Anthropic:
+    """
+    获取线程内复用的 Anthropic 客户端
+    """
+    client = getattr(_thread_local, "client", None)
+    if client is None:
+        client = Anthropic(api_key=api_key)
+        _thread_local.client = client
+    return client
+
+
+class RateLimiter:
+    """
+    简单全局速率限制器：保证请求起始间隔 >= min_interval
+    """
+
+    def __init__(self, min_interval: float):
+        self.min_interval = max(0.0, float(min_interval))
+        self._lock = threading.Lock()
+        self._last_time = 0.0
+
+    def wait(self) -> None:
+        if self.min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            sleep_for = self.min_interval - (now - self._last_time)
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+                now = time.monotonic()
+            self._last_time = now
 
 
 def load_system_prompt(api_context: List[str]) -> str:
@@ -198,6 +236,105 @@ def generate_claude_output(
     return None
 
 
+def collect_done_ids_from_output(
+    output_path: str,
+    request_id_scope: Optional[set[str]] = None
+) -> tuple[set[str], int, dict[str, int]]:
+    """
+    从既有 output JSONL 中收集已完成的 request id（用于断点续跑/去重）。
+
+    Args:
+        output_path: 输出 JSONL 路径
+        request_id_scope: 可选的 scope，仅统计在该集合内的 id
+
+    Returns:
+        (done_ids, total_lines, duplicate_counts)
+    """
+    path = Path(output_path)
+    if not path.exists():
+        return set(), 0, {}
+
+    counts: dict[str, int] = {}
+    total_lines = 0
+
+    for item in iter_jsonl(path):
+        if not isinstance(item, dict):
+            continue
+        total_lines += 1
+        item_id = item.get('id')
+        if not item_id:
+            continue
+        if request_id_scope is not None and item_id not in request_id_scope:
+            continue
+        counts[item_id] = counts.get(item_id, 0) + 1
+
+    done_ids = set(counts.keys())
+    dupes = {k: v for k, v in counts.items() if v > 1}
+    return done_ids, total_lines, dupes
+
+
+def dedupe_output_jsonl_inplace(output_path: str) -> dict:
+    """
+    按 id 对 output JSONL 去重（保留第一次出现），并生成备份文件。
+
+    Returns:
+        {
+          "backup_path": str,
+          "kept": int,
+          "removed": int,
+          "invalid_json_lines": int
+        }
+    """
+    src = Path(output_path)
+    if not src.exists():
+        return {"backup_path": "", "kept": 0, "removed": 0, "invalid_json_lines": 0}
+
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = str(src) + f".bak-{ts}"
+    tmp_path = str(src) + f".tmp-{ts}"
+
+    seen: set[str] = set()
+    kept = 0
+    removed = 0
+    invalid = 0
+
+    with open(src, "r", encoding="utf-8") as fin, open(tmp_path, "w", encoding="utf-8") as fout:
+        for line in fin:
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                invalid += 1
+                fout.write(line if line.endswith("\n") else line + "\n")
+                continue
+
+            if not isinstance(obj, dict):
+                fout.write(line if line.endswith("\n") else line + "\n")
+                kept += 1
+                continue
+
+            item_id = obj.get("id")
+            if item_id and item_id in seen:
+                removed += 1
+                continue
+            if item_id:
+                seen.add(item_id)
+
+            fout.write(line if line.endswith("\n") else line + "\n")
+            kept += 1
+
+    os.replace(str(src), backup_path)
+    os.replace(tmp_path, str(src))
+
+    return {
+        "backup_path": backup_path,
+        "kept": kept,
+        "removed": removed,
+        "invalid_json_lines": invalid,
+    }
+
+
 def run_claude_distill(
     requests_path: str,
     output_path: str,
@@ -205,7 +342,11 @@ def run_claude_distill(
     model: str = "claude-3-5-sonnet-20241022",
     max_items: Optional[int] = None,
     checkpoint_path: Optional[str] = None,
-    rate_limit_delay: float = 1.0
+    rate_limit_delay: float = 1.0,
+    resume_from: str = "auto",
+    dedupe_output: bool = False,
+    concurrency: int = 1,
+    max_in_flight: Optional[int] = None
 ) -> int:
     """
     运行 Claude API 蒸馏
@@ -217,7 +358,9 @@ def run_claude_distill(
         model: 模型名称
         max_items: 最大处理数量
         checkpoint_path: 检查点路径
-        rate_limit_delay: 请求间隔（秒）
+        rate_limit_delay: 请求间隔（秒），并发时为全局请求起始间隔
+        concurrency: 并发请求数（>1 可加速）
+        max_in_flight: 最大在途任务数（默认=concurrency）
 
     Returns:
         成功生成的数量
@@ -230,55 +373,185 @@ def run_claude_distill(
         requests = requests[:max_items]
         logger.info(f"Limited to {max_items} requests")
 
-    # 初始化 Claude 客户端
-    client = Anthropic(api_key=api_key)
-    logger.info(f"Using model: {model}")
+    concurrency = max(1, int(concurrency))
+    if max_in_flight is None:
+        max_in_flight = concurrency
+    else:
+        max_in_flight = max(1, int(max_in_flight))
+
+    logger.info(
+        f"Using model: {model} | concurrency={concurrency} | "
+        f"rate_limit_delay={rate_limit_delay}s | max_in_flight={max_in_flight}"
+    )
 
     # 确保输出文件存在
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     if not Path(output_path).exists():
         Path(output_path).touch()
 
+    if dedupe_output:
+        dedupe_stats = dedupe_output_jsonl_inplace(output_path)
+        logger.info(
+            "Deduped output file (keep first per id): "
+            f"kept={dedupe_stats['kept']}, removed={dedupe_stats['removed']}, "
+            f"invalid_json_lines={dedupe_stats['invalid_json_lines']}, "
+            f"backup={dedupe_stats['backup_path']}"
+        )
+
     # 检查点
     checkpoint = Checkpoint(checkpoint_path) if checkpoint_path else None
     if checkpoint:
         logger.info(f"Resuming from checkpoint: {len(checkpoint)} processed")
 
-    # 统计
-    success_count = 0
+    # 为确保断点续跑不重复计费/重复写入：优先从 output 文件同步已完成 id
+    for i, request in enumerate(requests):
+        if not request.get('id'):
+            request['id'] = f'req_{i}'
+
+    request_id_scope = {r['id'] for r in requests if r.get('id')}
+    output_done_ids, output_lines, output_dupes = collect_done_ids_from_output(
+        output_path=output_path,
+        request_id_scope=request_id_scope
+    )
+    checkpoint_done_ids = set(checkpoint.processed) & request_id_scope if checkpoint else set()
+
+    if output_dupes:
+        logger.warning(
+            f"Detected duplicated ids in output file: {len(output_dupes)} ids have duplicates. "
+            f"(e.g. {next(iter(output_dupes.items()))[0]} x{next(iter(output_dupes.items()))[1]})"
+        )
+
+    if resume_from not in {"auto", "output", "checkpoint"}:
+        raise ValueError("resume_from must be one of: auto, output, checkpoint")
+
+    if resume_from == "checkpoint":
+        done_ids = checkpoint_done_ids
+    elif resume_from == "output":
+        done_ids = output_done_ids
+    else:
+        # auto: output 有内容则以 output 为准，否则回退 checkpoint
+        done_ids = output_done_ids if output_done_ids else checkpoint_done_ids
+
+    # 同步 checkpoint，避免 output 已写入但 checkpoint 丢失导致重复生成
+    if checkpoint and done_ids != checkpoint_done_ids and resume_from in {"auto", "output"}:
+        added = len(done_ids - checkpoint_done_ids)
+        removed = len(checkpoint_done_ids - done_ids)
+        logger.info(f"Sync checkpoint from output: +{added}, -{removed}, total={len(done_ids)}")
+        checkpoint.processed = set(done_ids)
+        checkpoint.save()
+
+    logger.info(
+        f"Resume state: output_lines={output_lines}, done_in_output={len(output_done_ids)}, "
+        f"done_in_checkpoint={len(checkpoint_done_ids)}, done_in_scope={len(done_ids)}, "
+        f"remaining={len(requests) - len(done_ids)}"
+    )
+
+    # 统计（success_count 表示当前 scope 内累计成功数量：已有 + 新生成）
+    success_count = len(done_ids)
     failed_count = 0
+    completed_count = 0
+
+    pending: list[tuple[int, dict]] = []
 
     for i, request in enumerate(requests):
         req_id = request.get('id', f'req_{i}')
 
-        # 跳过已处理
-        if checkpoint and checkpoint.is_done(req_id):
-            success_count += 1
-            print_progress(i + 1, len(requests), prefix='Claude distill',
-                         suffix=f'✓ {success_count} | ✗ {failed_count}')
+        # 跳过已处理（output/checkpoint 任一已包含即可）
+        if req_id in done_ids:
+            completed_count += 1
+            print_progress(completed_count, len(requests), prefix='Claude distill',
+                           suffix=f'✓ {success_count} | ✗ {failed_count}')
             continue
 
-        # 调用 API
-        output = generate_claude_output(request, client, model)
+        pending.append((len(pending), request))
 
-        if output:
-            append_jsonl(output_path, output)
-            success_count += 1
+    if concurrency <= 1:
+        # 串行模式
+        client = Anthropic(api_key=api_key)
+        for idx, item in enumerate(pending):
+            _, request = item
+            req_id = request.get('id', '')
 
-            if checkpoint:
-                checkpoint.mark_done(req_id)
-                if (i + 1) % 10 == 0:
-                    checkpoint.save()
-        else:
-            failed_count += 1
-            logger.error(f"Failed to generate output for request {req_id}")
+            # 调用 API
+            output = generate_claude_output(request, client, model)
 
-        print_progress(i + 1, len(requests), prefix='Claude distill',
-                      suffix=f'✓ {success_count} | ✗ {failed_count}')
+            if output:
+                append_jsonl(output_path, output)
+                success_count += 1
+                done_ids.add(req_id)
 
-        # 速率限制
-        if i < len(requests) - 1:
-            time.sleep(rate_limit_delay)
+                if checkpoint:
+                    checkpoint.mark_done(req_id)
+                    checkpoint.save()  # 每条成功后立即保存，支持真正的断点续传
+            else:
+                failed_count += 1
+                logger.error(f"Failed to generate output for request {req_id}")
+
+            completed_count += 1
+            print_progress(completed_count, len(requests), prefix='Claude distill',
+                           suffix=f'✓ {success_count} | ✗ {failed_count}')
+
+            # 速率限制
+            if idx < len(pending) - 1:
+                time.sleep(rate_limit_delay)
+    else:
+        # 并发模式
+        rate_limiter = RateLimiter(rate_limit_delay)
+
+        def worker(req: dict) -> Optional[dict]:
+            rate_limiter.wait()
+            client = get_thread_client(api_key)
+            return generate_claude_output(req, client, model)
+
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            pending_iter = iter(pending)
+            futures: dict = {}
+            ordered_buffer: dict[int, tuple[Optional[dict], str]] = {}
+            next_write_index = 0
+
+            def submit_one() -> bool:
+                try:
+                    order_index, req = next(pending_iter)
+                except StopIteration:
+                    return False
+                req_id = req.get('id', '')
+                futures[executor.submit(worker, req)] = (order_index, req_id)
+                return True
+
+            for _ in range(min(max_in_flight, len(pending))):
+                submit_one()
+
+            while futures:
+                done, _ = wait(futures, return_when=FIRST_COMPLETED)
+                for future in done:
+                    order_index, req_id = futures.pop(future)
+                    try:
+                        output = future.result()
+                    except Exception as e:
+                        logger.error(f"Unexpected error for request {req_id}: {e}")
+                        output = None
+                    ordered_buffer[order_index] = (output, req_id)
+
+                    while next_write_index in ordered_buffer:
+                        buffered_output, buffered_id = ordered_buffer.pop(next_write_index)
+                        if buffered_output:
+                            append_jsonl(output_path, buffered_output)
+                            success_count += 1
+                            done_ids.add(buffered_id)
+
+                            if checkpoint:
+                                checkpoint.mark_done(buffered_id)
+                                checkpoint.save()
+                        else:
+                            failed_count += 1
+                            logger.error(f"Failed to generate output for request {buffered_id}")
+
+                        completed_count += 1
+                        print_progress(completed_count, len(requests), prefix='Claude distill',
+                                       suffix=f'✓ {success_count} | ✗ {failed_count}')
+                        next_write_index += 1
+
+                    submit_one()
 
     if checkpoint:
         checkpoint.save()
@@ -361,7 +634,31 @@ def main():
         '--rate-limit-delay',
         type=float,
         default=1.0,
-        help='请求间隔秒数（避免触发速率限制，默认 1.0 秒）'
+        help='请求间隔秒数（并发时为全局请求起始间隔，默认 1.0 秒）'
+    )
+    parser.add_argument(
+        '--concurrency',
+        type=int,
+        default=1,
+        help='并发请求数（>1 可加速，注意速率限制）'
+    )
+    parser.add_argument(
+        '--max-in-flight',
+        type=int,
+        default=None,
+        help='最大在途任务数（默认=concurrency）'
+    )
+    parser.add_argument(
+        '--resume-from',
+        type=str,
+        default='auto',
+        choices=['auto', 'output', 'checkpoint'],
+        help='断点续跑基准：auto=优先 output，否则 checkpoint；output=以输出文件为准；checkpoint=只看检查点'
+    )
+    parser.add_argument(
+        '--dedupe-output',
+        action='store_true',
+        help='启动时对输出 JSONL 按 id 去重（保留第一次出现），并生成 .bak 备份'
     )
 
     args = parser.parse_args()
@@ -394,7 +691,8 @@ def main():
         model_name = "Unknown"
 
     estimated_cost = total_requests * cost_per_request
-    estimated_time = total_requests * (args.rate_limit_delay + 2)  # 2秒平均响应时间
+    effective_concurrency = max(1, int(args.concurrency))
+    estimated_time = total_requests * (args.rate_limit_delay + 2) / effective_concurrency
 
     print(f"\n{'='*60}")
     print(f"Claude API 蒸馏任务")
@@ -422,7 +720,11 @@ def main():
         model=args.model,
         max_items=args.max_items,
         checkpoint_path=args.checkpoint,
-        rate_limit_delay=args.rate_limit_delay
+        rate_limit_delay=args.rate_limit_delay,
+        resume_from=args.resume_from,
+        dedupe_output=args.dedupe_output,
+        concurrency=args.concurrency,
+        max_in_flight=args.max_in_flight
     )
 
     elapsed = time.time() - start_time
