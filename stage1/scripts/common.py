@@ -8,6 +8,7 @@ import json
 import os
 import hashlib
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Union
 from datetime import datetime
@@ -183,6 +184,7 @@ class JsonlCache:
         self.cache_path = Path(cache_path)
         self.key_field = key_field
         self._cache: Dict[str, dict] = {}
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -198,10 +200,11 @@ class JsonlCache:
         return self._cache.get(key)
 
     def set(self, key: str, value: dict) -> None:
-        """设置缓存项"""
-        value[self.key_field] = key
-        self._cache[key] = value
-        append_jsonl(self.cache_path, value)
+        """设置缓存项（线程安全）"""
+        with self._lock:
+            value[self.key_field] = key
+            self._cache[key] = value
+            append_jsonl(self.cache_path, value)
 
     def has(self, key: str) -> bool:
         """检查是否存在缓存"""

@@ -210,7 +210,7 @@ python run_teacher_claude.py
 
 # 6. 后续步骤保持不变
 python parse_teacher_outputs.py --input ../data/sft_distill/raw_outputs_claude.jsonl
-python run_validator_filter.py
+python run_validator_filter.py --workers 50
 python select_best.py
 python build_sft_dataset.py
 ```

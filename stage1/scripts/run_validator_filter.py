@@ -15,7 +15,7 @@ import tempfile
 import sys
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from common import (
     read_jsonl, write_jsonl, write_json, append_jsonl,
@@ -467,40 +467,47 @@ def run_filter_pipeline(
 
     validated = []
 
-    # 串行处理（避免进程池开销，validator 已经是子进程）
-    for i, candidate in enumerate(candidates):
-        validated_candidate = validate_candidate(
-            candidate=candidate,
-            codes_dir=codes_dir,
-            cache=cache,
-            skip_runtime=skip_runtime
-        )
-        validated.append(validated_candidate)
+    # 并行处理
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                validate_candidate,
+                candidate=candidate,
+                codes_dir=codes_dir,
+                cache=cache,
+                skip_runtime=skip_runtime
+            ): i
+            for i, candidate in enumerate(candidates)
+        }
 
-        # 统计
-        if validated_candidate.get('l1_passed'):
-            stats['l1_passed'] += 1
-        if validated_candidate.get('l2_passed'):
-            stats['l2_passed'] += 1
-        if validated_candidate.get('l3_passed'):
-            stats['l3_passed'] += 1
-        if validated_candidate.get('l4_passed'):
-            stats['l4_passed'] += 1
+        for future in as_completed(futures):
+            validated_candidate = future.result()
+            validated.append(validated_candidate)
 
-        all_passed = (
-            validated_candidate.get('l1_passed') and
-            validated_candidate.get('l2_passed') and
-            validated_candidate.get('l3_passed') and
-            validated_candidate.get('l4_passed')
-        )
-        if all_passed:
-            stats['all_passed'] += 1
+            # 统计
+            if validated_candidate.get('l1_passed'):
+                stats['l1_passed'] += 1
+            if validated_candidate.get('l2_passed'):
+                stats['l2_passed'] += 1
+            if validated_candidate.get('l3_passed'):
+                stats['l3_passed'] += 1
+            if validated_candidate.get('l4_passed'):
+                stats['l4_passed'] += 1
 
-        for issue in validated_candidate.get('filter_issues', []):
-            issue_key = issue.split(':')[0]  # 取主要类型
-            stats['issues'][issue_key] = stats['issues'].get(issue_key, 0) + 1
+            all_passed = (
+                validated_candidate.get('l1_passed') and
+                validated_candidate.get('l2_passed') and
+                validated_candidate.get('l3_passed') and
+                validated_candidate.get('l4_passed')
+            )
+            if all_passed:
+                stats['all_passed'] += 1
 
-        print_progress(i + 1, len(candidates), prefix='Validating')
+            for issue in validated_candidate.get('filter_issues', []):
+                issue_key = issue.split(':')[0]  # 取主要类型
+                stats['issues'][issue_key] = stats['issues'].get(issue_key, 0) + 1
+
+            print_progress(len(validated), len(candidates), prefix='Validating')
 
     # 保存结果
     write_jsonl(output_path, validated)
