@@ -1,0 +1,45 @@
+{
+  "created_at": "2026-02-05T02:17:10.028349+00:00",
+  "seed": 42,
+  "train_prompt_ids": 607,
+  "requests_prompt_ids": 1393,
+  "eval_iid_requested": 200,
+  "eval_ood_requested": 50,
+  "eval_written": 250,
+  "human_requested": 50,
+  "human_written": 50,
+  "eval_summary": {
+    "total": 250,
+    "by_difficulty": {
+      "easy": 81,
+      "medium": 108,
+      "hard": 61
+    },
+    "by_ood": {
+      "iid": 200,
+      "ood": 50
+    },
+    "by_primary_module": {
+      "Scene": 250
+    }
+  },
+  "human_summary": {
+    "total": 50,
+    "by_difficulty": {
+      "easy": 20,
+      "medium": 20,
+      "hard": 10
+    },
+    "by_ood": {
+      "iid": 41,
+      "ood": 9
+    },
+    "by_primary_module": {
+      "Scene": 50
+    }
+  },
+  "source_requests": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/requests.jsonl",
+  "source_train": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_dataset/train.jsonl",
+  "out_eval": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/eval/prompts_eval.jsonl",
+  "out_human": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/eval/prompts_human.jsonl"
+}

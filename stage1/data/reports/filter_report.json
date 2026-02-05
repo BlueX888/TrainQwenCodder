@@ -1,6 +1,6 @@
 {
   "name": "validator_filter",
-  "timestamp": "2026-02-03T17:32:49.312266",
+  "timestamp": "2026-02-03T18:30:43.429776",
   "total": 6000,
   "passed": 1688,
   "failed": 4312,
@@ -16,19 +16,19 @@
     "l4_rate": 98.57,
     "skip_runtime": false,
     "issue_distribution": {
-      "l4_low_plan_code_consistency": 5644,
-      "l2_must_use_miss": 2682,
-      "l2_warning_miss_rate": 1120,
       "l1_lint_failed": 1937,
       "l1_lint_error": 4313,
+      "l2_must_use_miss": 2682,
+      "l4_low_plan_code_consistency": 5644,
       "l2_high_miss_rate": 668,
       "l3_runtime_failed": 2808,
       "l3_crashed": 2808,
       "l3_runtime_errors": 2759,
+      "l2_warning_miss_rate": 1120,
+      "l4_hard_missing_preload": 34,
       "l1_parse_failed": 74,
       "l4_missing_game": 75,
-      "l4_missing_create": 74,
-      "l4_hard_missing_preload": 34
+      "l4_missing_create": 74
     },
     "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/validated.jsonl"
   }
