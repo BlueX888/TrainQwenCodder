@@ -6,11 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -94,7 +97,7 @@ def main() -> None:
     ap.add_argument("--model", required=True, help="Base 或 SFT 模型路径/名称")
     ap.add_argument("--prompts", required=True, help="prompts_eval.jsonl")
     ap.add_argument("--out", required=True, help="输出 jsonl")
-    ap.add_argument("--system-prompt", default="你是一个 Phaser3 游戏开发专家。")
+    ap.add_argument("--system-prompt", default="你是一个 Phaser3 游戏开发专家。请根据用户的任务描述，先输出结构化计划 [PLAN]，然后输出完整的 Phaser3 代码。\n\n输出格式要求：\n1. 先输出 [PLAN]...[/PLAN] 块，包含需求摘要、API 列表和步骤\n2. 然后输出完整的 JavaScript 代码（使用 ```javascript 包裹）\n3. 代码必须可独立运行，包含完整的 Game 配置和 Scene 生命周期")
     ap.add_argument("--use-chat-template", action="store_true", default=True)
     ap.add_argument("--no-chat-template", dest="use_chat_template", action="store_false")
     ap.add_argument("--temperature", type=float, default=0.2)
@@ -121,21 +124,34 @@ def main() -> None:
         raise SystemExit("no seeds provided")
 
     # Load model/tokenizer
+    print(f"{'='*60}")
+    print(f"加载模型: {args.model}")
+    print(f"{'='*60}")
+    
     dtype_map = {
         "auto": "auto",
         "float16": torch.float16,
         "bfloat16": torch.bfloat16,
         "float32": torch.float32,
     }
-    torch_dtype = dtype_map[args.dtype]
+    model_dtype = dtype_map[args.dtype]
 
+    print("正在加载 tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=args.trust_remote_code)
+    print(f"  ✓ Tokenizer 加载完成 (vocab_size={tokenizer.vocab_size})")
+    
+    print("正在加载模型...")
+    load_start = time.time()
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        torch_dtype=torch_dtype,
+        dtype=model_dtype,
         device_map=args.device_map,
         trust_remote_code=args.trust_remote_code,
     )
+    load_time = time.time() - load_start
+    print(f"  ✓ 模型加载完成 (耗时 {load_time:.2f}s)")
+    print(f"  设备: {next(model.parameters()).device}")
+    print(f"  数据类型: {next(model.parameters()).dtype}")
     model.eval()
 
     if tokenizer.pad_token_id is None:
@@ -152,8 +168,24 @@ def main() -> None:
 
     outputs: List[Dict] = []
     batch_size = max(1, int(args.batch_size))
+    total_generations = len(rows) * len(seeds)
 
-    for seed in seeds:
+    print(f"\n{'='*60}")
+    print(f"生成配置:")
+    print(f"  temperature={gen_cfg.temperature}, top_p={gen_cfg.top_p}, top_k={gen_cfg.top_k}")
+    print(f"  max_new_tokens={gen_cfg.max_new_tokens}, repetition_penalty={gen_cfg.repetition_penalty}")
+    print(f"  do_sample={gen_cfg.do_sample}")
+    print(f"{'='*60}")
+    print(f"Prompts 数量: {len(rows)}")
+    print(f"Seeds: {seeds}")
+    print(f"Batch size: {batch_size}")
+    print(f"总生成数量: {total_generations}")
+    print(f"{'='*60}\n")
+    batch_size = max(1, int(args.batch_size))
+    gen_start_time = time.time()
+    pbar = tqdm(total=total_generations, desc="生成进度", unit="sample")
+
+    for seed_idx, seed in enumerate(seeds):
         set_seed(seed)
         sample_id = 0
         # Simple batching
@@ -187,6 +219,7 @@ def main() -> None:
             # Decode only newly generated tokens
             for idx, r in enumerate(batch):
                 prompt_len = enc.input_ids[idx].shape[0]
+                generated_tokens = len(gen[idx]) - prompt_len
                 text = tokenizer.decode(gen[idx][prompt_len:], skip_special_tokens=True)
                 outputs.append(
                     {
@@ -204,8 +237,20 @@ def main() -> None:
                     }
                 )
                 sample_id += 1
+                pbar.update(1)
+    
+    pbar.close()
+    gen_total_time = time.time() - gen_start_time
+    
+    print(f"\n{'='*60}")
+    print(f"生成完成!")
+    print(f"  总耗时: {gen_total_time:.2f}s")
+    print(f"  平均每样本: {gen_total_time/total_generations:.2f}s")
+    print(f"  生成样本数: {len(outputs)}")
 
     write_jsonl(Path(args.out), outputs)
+    print(f"  输出文件: {args.out}")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":
