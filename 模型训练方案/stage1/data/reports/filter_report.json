@@ -1,0 +1,24 @@
+{
+  "name": "validator_filter",
+  "timestamp": "2026-02-09T10:53:36.666223",
+  "total": 6000,
+  "passed": 4088,
+  "failed": 1912,
+  "pass_rate": 68.13,
+  "details": {
+    "l1_passed": 4093,
+    "l1_rate": 68.22,
+    "l4_passed": 5963,
+    "l4_rate": 99.38,
+    "issue_distribution": {
+      "l4_low_plan_code_consistency": 5643,
+      "l1_lint_failed": 1907,
+      "l1_lint_error": 4362,
+      "l1_parse_failed": 25,
+      "l4_missing_game": 26,
+      "l4_missing_create": 25,
+      "l4_hard_missing_preload": 34
+    },
+    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/validated.jsonl"
+  }
+}

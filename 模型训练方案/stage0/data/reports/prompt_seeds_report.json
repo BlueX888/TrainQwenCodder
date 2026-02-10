@@ -1,0 +1,18 @@
+{
+  "total": 2000,
+  "by_difficulty": {
+    "easy": 800,
+    "medium": 800,
+    "hard": 400
+  },
+  "by_module": {
+    "Scene": 2000,
+    "GameObjects": 1160,
+    "Input": 809,
+    "Animations": 283,
+    "Camera": 100,
+    "Particles": 37,
+    "Physics": 786,
+    "Tilemap": 33
+  }
+}

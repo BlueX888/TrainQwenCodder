@@ -1,0 +1,29 @@
+{
+  "name": "selection",
+  "timestamp": "2026-02-09T10:54:46.044156",
+  "total": 4088,
+  "passed": 2901,
+  "failed": 1187,
+  "pass_rate": 70.96,
+  "details": {
+    "total_candidates": 6000,
+    "after_filter": 4088,
+    "total_prompts": 1581,
+    "avg_selected_per_prompt": 1.83,
+    "max_per_prompt": 2,
+    "similarity_threshold": 0.85,
+    "difficulty_distribution": {
+      "easy": 1458,
+      "medium": 951,
+      "hard": 492
+    },
+    "quality_score_distribution": {
+      "0.0-0.3": 0,
+      "0.3-0.5": 2901,
+      "0.5-0.7": 0,
+      "0.7-0.9": 0,
+      "0.9-1.0": 0
+    },
+    "output_path": "/Users/admin/Desktop/TrainQwenCodder/stage1/data/sft_distill/selected.jsonl"
+  }
+}
