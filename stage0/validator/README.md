@@ -1,3 +1,4 @@
+<!-- validator 使用说明与运行方式。 -->
 # validator/
 
 用于对“模型生成的 Phaser3 代码”做静态/运行时验证并输出结构化 JSON。
@@ -26,4 +27,3 @@ node src/cli.js \
 
 - `--skip-eslint`：跳过 ESLint
 - `--skip-runtime`：跳过运行时（HEADLESS）
-

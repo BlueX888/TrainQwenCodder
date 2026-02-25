@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# 调用 validator 对单个代码样本做端到端验证。
 
 import argparse
 import json
@@ -79,4 +80,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

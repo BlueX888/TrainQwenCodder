@@ -1,3 +1,4 @@
+// AST 解析与结构信号/危险用法/API 候选提取。
 function requireOptional(name) {
   try {
     return require(name);

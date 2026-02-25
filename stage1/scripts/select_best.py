@@ -29,8 +29,6 @@ def calculate_quality_score(candidate: dict) -> float:
 
     评分维度：
     - L1 基础分 (0.2)
-    - L2 API 准确率 (0.25)
-    - L3 运行时 (0.25)
     - L4 结构与一致性 (0.3)
     """
     score = 0.0
@@ -42,33 +40,6 @@ def calculate_quality_score(candidate: dict) -> float:
         validator_result = candidate.get('validator_result', {})
         warnings = len(validator_result.get('warnings', []))
         score -= min(0.05, warnings * 0.01)
-
-    # L2: API 准确率
-    if candidate.get('l2_passed'):
-        validator_result = candidate.get('validator_result', {})
-        api_usage = validator_result.get('api_usage', {})
-        hits = len(api_usage.get('hits', []))
-        misses = len(api_usage.get('misses', []))
-        total = hits + misses
-        if total > 0:
-            api_accuracy = hits / total
-            score += 0.25 * api_accuracy
-        else:
-            score += 0.15  # 无 API 调用时给基础分
-
-    # L3: 运行时
-    if candidate.get('l3_passed'):
-        l3_skipped = 'l3_skipped' in candidate.get('filter_issues', [])
-        if l3_skipped:
-            score += 0.15  # 跳过验证给基础分
-        else:
-            score += 0.25
-            # 运行时间奖励（快速代码加分）
-            validator_result = candidate.get('validator_result', {})
-            runtime = validator_result.get('runtime', {})
-            runtime_ms = runtime.get('ms', 1500)
-            if runtime_ms < 500:
-                score += 0.05
 
     # L4: 结构与一致性
     if candidate.get('l4_passed'):
@@ -179,11 +150,11 @@ def run_selection(
     运行 L5 多样性筛选
 
     Args:
-        validated_path: L1-L4 验证后的数据文件
+        validated_path: L1/L4 验证后的数据文件
         output_path: 输出文件路径
         max_per_prompt: 每个 prompt 最多保留的数量
         similarity_threshold: 相似度阈值
-        require_all_passed: 是否要求 L1-L4 全部通过
+        require_all_passed: 是否要求 L1/L4 全部通过
         report_path: 报告输出路径
 
     Returns:
@@ -197,8 +168,7 @@ def run_selection(
     if require_all_passed:
         filtered = [
             c for c in candidates
-            if c.get('l1_passed') and c.get('l2_passed') and
-               c.get('l3_passed') and c.get('l4_passed')
+            if c.get('l1_passed') and c.get('l4_passed')
         ]
     else:
         # 至少通过 L1 和 L4

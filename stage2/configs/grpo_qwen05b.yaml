@@ -1,0 +1,76 @@
+# VeRL GRPO Configuration for Qwen2.5-Coder-0.5B Phaser3 Code Generation
+# 参考配置文档，实际参数通过 run_grpo.sh 的 CLI 覆盖传入。
+#
+# 参考文档:
+#   - VeRL Config: https://verl.readthedocs.io/en/latest/examples/config.html
+#   - VeRL GRPO: https://verl.readthedocs.io/en/latest/algo/grpo.html
+#   - VeRL Reward: https://verl.readthedocs.io/en/latest/preparation/reward_function.html
+
+data:
+  train_files: stage2/data/grpo/train.parquet
+  val_files: stage2/data/grpo/eval.parquet
+  train_batch_size: 16                    # 每步的 prompt 数量
+  max_prompt_length: 512                  # prompt 最大 token 长度
+  max_response_length: 2048              # 响应最大 token（Plan ~200 + Code ~1500）
+  filter_overlong_prompts: true
+  truncation: error
+  shuffle: true
+
+actor_rollout_ref:
+  model:
+    path: model/sft_checkpoint             # 阶段一 SFT 模型路径
+    use_remove_padding: true
+    enable_gradient_checkpointing: true
+
+  actor:
+    optim:
+      lr: 3.0e-6                          # RL 学习率（比 SFT 更小）
+    ppo_mini_batch_size: 128              # = train_batch_size * group_size (16 * 8)
+    ppo_micro_batch_size_per_gpu: 8       # 单 GPU 微批量
+    ppo_epochs: 1                         # 每步单次更新
+    clip_ratio: 0.2                       # GRPO 裁剪范围
+    use_kl_loss: true                     # GRPO 必需：KL 在 loss 中
+    kl_loss_coef: 0.01                    # KL 散度权重
+    kl_loss_type: low_var_kl              # 方差缩减 KL 估计
+    entropy_coeff: 0.0
+    loss_agg_mode: token-mean             # token 级别平均（避免长序列不稳定）
+    fsdp_config:
+      param_offload: false
+      optimizer_offload: false
+
+  rollout:
+    name: vllm                            # vLLM 加速推理
+    n: 8                                  # G=8 组采样
+    tensor_model_parallel_size: 1         # 0.5B 单卡
+    gpu_memory_utilization: 0.85
+    temperature: 0.7                      # 探索温度
+    top_p: 0.9
+    load_format: safetensors
+    log_prob_micro_batch_size_per_gpu: 8
+
+  ref:
+    log_prob_micro_batch_size_per_gpu: 8
+    fsdp_config:
+      param_offload: true                 # 参考模型 offload 省显存
+
+algorithm:
+  adv_estimator: grpo                     # GRPO（非 GAE/PPO）
+  use_kl_in_reward: false                 # KL 在 loss 中，不在 reward 中
+
+custom_reward_function:
+  path: stage2/scripts/reward_phaser.py
+  name: compute_score
+
+trainer:
+  critic_warmup: 0                        # GRPO 无 critic
+  logger: ["console", "wandb"]
+  project_name: phaser3_grpo
+  experiment_name: qwen05b_grpo_v1
+  n_gpus_per_node: 1                      # 0.5B 单卡
+  nnodes: 1
+  save_freq: 10                           # 每 10 步保存 checkpoint
+  test_freq: 5                            # 每 5 步评估
+  total_epochs: 15
+  resume_mode: auto
+  save_total_limit: 5                     # 最多保留 5 个 checkpoint
+  val_before_train: true                  # 训练前先评估基线

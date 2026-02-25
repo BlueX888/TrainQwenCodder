@@ -1,3 +1,4 @@
+// 加载 API 索引 JSONL，构建 symbol_id 的集合用于命中/缺失判定。
 const fs = require("fs");
 const readline = require("readline");
 
@@ -35,4 +36,3 @@ async function loadApiIndex(indexPath) {
 }
 
 module.exports = { loadApiIndex };
-

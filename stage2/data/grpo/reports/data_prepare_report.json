@@ -1,0 +1,28 @@
+{
+  "total_seeds": 2000,
+  "train_count": 1700,
+  "eval_count": 300,
+  "train_path": "stage2/data/grpo/train.parquet",
+  "eval_path": "stage2/data/grpo/eval.parquet",
+  "columns": [
+    "data_source",
+    "prompt",
+    "ability",
+    "reward_model",
+    "extra_info"
+  ],
+  "difficulty_distribution": {
+    "train": {
+      "hard": 340,
+      "medium": 680,
+      "easy": 680
+    },
+    "eval": {
+      "medium": 120,
+      "hard": 60,
+      "easy": 120
+    }
+  },
+  "random_seed": 42,
+  "data_source": "phaser3_grpo"
+}

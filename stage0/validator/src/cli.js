@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// validator 入口：串联 AST/ESLint/API 索引与可选运行时检查。
 /* eslint-disable no-console */
 
 const fs = require("fs");

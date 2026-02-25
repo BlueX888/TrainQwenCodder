@@ -1,0 +1,27 @@
+# ============================================
+# TrainQwenCodder — Python 依赖
+# ============================================
+# 安装: pip install -r requirements.txt
+# 如需 GPU 训练, 请先安装对应 CUDA 版本的 PyTorch:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# ============================================
+
+# --- 数据处理 ---
+pandas>=1.3
+pyarrow>=8.0
+
+# --- Stage 1: SFT 蒸馏 ---
+anthropic>=0.20          # Claude API 客户端
+
+# --- Stage 1 & 2: 模型推理/训练 ---
+transformers>=4.37
+torch>=2.1
+accelerate>=0.25         # HuggingFace 训练加速
+datasets>=2.14           # HuggingFace datasets
+
+# --- Stage 2: GRPO 强化学习训练 ---
+verl>=0.2                # VeRL RL 训练框架
+vllm>=0.4                # 高效推理引擎 (VeRL rollout 后端)
+
+# --- 可选: 实验跟踪 ---
+wandb                    # run_grpo.sh 使用 wandb logger

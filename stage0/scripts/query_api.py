@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# 对 API 索引执行 BM25 检索，用于 Prompt 注入与人工检索。
 
 import argparse
 import heapq
@@ -210,4 +211,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

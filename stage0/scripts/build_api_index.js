@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// 从 phaser.d.ts 构建 Phaser API 索引（JSONL + meta）。
 /* eslint-disable no-console */
 
 /**

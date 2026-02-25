@@ -1,9 +1,10 @@
+<!-- Stage0 详细设计与数据/脚本/validator 说明。 -->
 # Stage 0（基础设施准备）
 
 `stage0/` 是整个训练工程的“地基层”，目标是把后续阶段（SFT/GRPO/评估）依赖的三件事做成**可复现的离线产物**：
 
 1) **Phaser3 API 索引（JSONL）**：从 `phaser.d.ts` 提取结构化记录，用于 Prompt 注入与 API 弱校验  
-2) **Prompt 种子库（JSONL，≥2000）**：覆盖 Phaser3 核心模块与难度分布，为蒸馏/SFT/评估提供标准化任务输入  
+2) **Prompt 种子库（JSONL，2000）**：覆盖 Phaser3 核心模块与难度分布，为蒸馏/SFT/评估提供标准化任务输入  
 3) **代码验证器（validator）**：静态（Babel AST + ESLint + API index）+ 可选运行时（HEADLESS best-effort），输出结构化 JSON
 
 ---
@@ -359,4 +360,3 @@ stage1/（SFT 冷启动）直接消费 stage0 的三类产物：
 - scripts 概览：`scripts/README.md`
 - validator 概览：`validator/README.md`
 - 阶段零全量设计：`../阶段零-基础设施准备-详细实施文档.md`
-

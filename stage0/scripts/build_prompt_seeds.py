@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# 生成 Phaser Prompt 种子库与覆盖率报告。
 """
 Prompt 种子库生成器 - 扩展版
 目标：生成 2000+ 条覆盖 Phaser3 各模块的高质量 Prompt

@@ -1,4 +1,4 @@
-// Simple Phaser3 test code
+// Phaser 示例代码，用于快速验证 validator。
 const config = {
     type: Phaser.AUTO,
     width: 800,

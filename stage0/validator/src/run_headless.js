@@ -1,3 +1,4 @@
+// 启动子进程运行 runtime_child.js，提供受控的 HEADLESS 运行时验证。
 const path = require("path");
 const { execFile } = require("child_process");
 
@@ -58,4 +59,3 @@ function runHeadless({ codeFile, frames, timeoutMs }) {
 }
 
 module.exports = { runHeadless };
-

@@ -1,118 +1,161 @@
+<!-- Stage0 快速开始与高层说明。 -->
 # Stage 0（基础设施准备）
 
-`stage0/` 是整个训练工程的“地基层”：把后续阶段（SFT/GRPO/评估）会反复依赖的能力，提前固化为**可复现的离线产物**与**稳定的验证信号**。
+`stage0/` 是整个训练工程的“地基层”，目标是把后续阶段（SFT/GRPO/评估）依赖的三件事做成**可复现的离线产物**：
 
-本阶段的设计目标不是“把 Phaser3 全部跑起来”，而是用更低的工程成本，提供训练数据生产线所需的三类基础设施：
-
-1) **Phaser3 API 索引（JSONL）**：从 `phaser.d.ts` 提取结构化记录，用于 Prompt 注入与 API 存在性弱校验  
-2) **Prompt 种子库（JSONL，默认 2000）**：覆盖核心模块与难度分布，作为蒸馏/SFT/评估的标准化任务输入  
-3) **代码验证器（validator）**：静态（Babel AST + ESLint + API index）+ 可选运行时（HEADLESS best-effort），输出结构化 JSON
-
-更完整的实现细节见：`DETAILS.md` 与仓库根目录 `阶段零-基础设施准备-详细实施文档.md`。
+1) **Phaser3 API 索引（JSONL）**：从 `phaser.d.ts` 提取结构化记录，用于 Prompt 注入与 API 弱校验  
+2) **Prompt 种子库（JSONL，默认 2000 条）**：覆盖 Phaser3 核心模块与难度分布  
+3) **代码验证器（validator）**：静态（Babel AST + ESLint + API index）+ 可选运行时（HEADLESS）
 
 ---
 
-## 设计方案（高层）
-
-### 1) 产物优先（Artifacts-first）
-
-stage0 的核心交付物全部落在 `stage0/data/` 与 `stage0/validator/`：
-
-- `data/api_index/phaser_api.jsonl`：API 索引（下游用于检索 + validator 命中/缺失对比）
-- `data/api_index/meta.json`：索引元信息（版本、构建时间、统计）
-- `data/prompt_seeds/prompt_seeds.jsonl`：结构化 Prompt 种子库
-- `data/reports/*`：种子库覆盖率/统计报告（便于验收与回归）
-- `validator/src/cli.js`：验证器入口（stage1/2/3 直接调用）
-
-这些产物的共同要求是：**schema 固定、可重复构建、可离线消费**。
-
-### 2) 契约驱动（Contract-first）
-
-API 索引与 validator 之间通过 `symbol_id` 建立“弱一致性契约”：
-
-- 方法：`<owner>#<name>`，例如 `Phaser.GameObjects.Sprite#setTexture`
-- 属性/常量/namespace 函数：`<owner>.<name>`，例如 `Phaser.Input.Events.POINTER_DOWN`
-- namespace/class/interface 本身也会入库（用于 Prompt 注入的高层锚点），例如 `Phaser.Actions`
-
-validator 的 AST 提取会尽量把代码中的访问路径映射为同一套 `symbol_id`，然后用 `Set(symbol_id)` 做存在性对比：命中（hits）与缺失（misses）都会作为结构化信号输出给下游过滤/奖励逻辑。
-
-### 3) 低依赖、够用优先（Best-effort）
-
-- `scripts/build_api_index.js` 不依赖 TypeScript Compiler API，而采用**注释剥离 + brace depth 栈 + 正则**的轻量解析：牺牲“100% 类型保真”，换取“可维护、可复现、够用”的索引。
-- Prompt 种子生成用**模板 + 参数化维度 + 随机种子**，用 `--seed` 固定随机性，确保同配置下输出可复现。
-- validator 的运行时链路是“可选层”：在 Node 里用 `jsdom/canvas`（可选依赖）做 best-effort DOM/canvas 注入，并通过子进程 + 超时限制降低卡死风险；默认更推荐先跑静态链路。
-
-### 4) 版本一致性（Version-lock）
-
-为降低“索引里有/运行时没”或“运行时能跑/索引缺失”的噪声，建议锁定 Phaser 版本，并尽量保持：
-
-- `stage0/package.json`（用于拿到 `phaser.d.ts`）
-- `stage0/validator/package.json`（运行时验证时 `require('phaser')`）
-
-与 `data/api_index/meta.json` 中记录的 `phaser_version` 一致。
-
----
-
-## 目录结构
+## 目录概览
 
 ```text
 stage0/
-├─ README.md
-├─ DETAILS.md
-├─ package.json
-├─ data/
-│  ├─ api_index/        # Phaser API 索引 + meta
-│  ├─ prompt_seeds/     # Prompt 种子库
-│  └─ reports/          # 覆盖率与统计报告
-├─ scripts/             # 离线脚本（构建索引/种子/检索/单样本验证）
-├─ validator/           # Node 验证器（AST/ESLint/可选运行时）
-└─ test_code.js         # 示例 Phaser 代码（用于快速验证）
+├─ data/                 # 可重复生成的产物（api_index / prompt_seeds / reports）
+├─ scripts/              # 离线脚本（构建索引/种子/验证）
+├─ validator/            # Node 验证器工程
+├─ test_code.js          # 示例 Phaser 代码
+├─ DETAILS.md            # 详细设计与数据格式
+├─ FLOW.md               # 文件流向与流程设计
+└─ README.md             # 本文（快速开始）
 ```
 
 ---
 
-## 快速开始（端到端最小工作流）
+## 流程关系（文件链路）
 
-以下命令默认在 `stage0/` 目录执行。
+```mermaid
+graph LR
+  A["stage0/package.json"] --> B["node_modules/phaser/types/phaser.d.ts"]
+  B --> C["scripts/build_api_index.js"]
+  C --> D["data/api_index/phaser_api.jsonl"]
+  C --> E["data/api_index/meta.json"]
+  D --> F["scripts/query_api.py"]
+  D --> G["validator/src/api_index.js"]
+
+  H["scripts/build_prompt_seeds.py"] --> I["data/prompt_seeds/prompt_seeds.jsonl"]
+  H --> J["data/reports/prompt_seeds_report.json"]
+  H --> K["data/reports/prompt_coverage.csv"]
+
+  L["validator/src/cli.js"] --> M["validator/src/ast_check.js"]
+  L --> N["validator/src/eslint_check.js"]
+  L --> G
+  L --> O["validator/src/run_headless.js"]
+  O --> P["validator/src/runtime_child.js"]
+
+  Q["scripts/validate_sample.py"] --> L
+  R["test_code.js"] --> Q
+```
+
+关键链路：
+- **API 索引**：`phaser.d.ts` → `build_api_index.js` → `data/api_index/*`
+- **Prompt 种子**：`build_prompt_seeds.py` → `data/prompt_seeds/*` + `data/reports/*`
+- **代码验证**：`validate_sample.py` → `validator/src/cli.js` → AST/ESLint/API/Runtime
+
+---
+
+## 文件说明（按路径）
+
+> 说明范围：以下列出 `stage0/` 下的**项目文件与数据产物**。`node_modules/` 内为 npm 自动生成的第三方依赖文件，数量巨大，故不逐一展开。
+
+### 顶层文件
+
+- `stage0/README.md`：快速开始与高层说明（本文）。
+- `stage0/DETAILS.md`：详细设计、数据格式与契约说明。
+- `stage0/FLOW.md`：文件流向与流程设计（Mermaid + 表格）。
+- `stage0/package.json`：安装 Phaser 以获取 `phaser.d.ts`。
+- `stage0/package-lock.json`：锁定依赖版本。
+- `stage0/test_code.js`：示例 Phaser 代码，用于快速验证。
+- `stage0/node_modules/`：安装后的第三方依赖（自动生成）。
+- `stage0/.DS_Store`：macOS 目录元数据（可忽略/可删除）。
+
+### data/（可复现离线产物）
+
+- `stage0/data/api_index/phaser_api.jsonl`：Phaser API 索引（JSONL）。
+- `stage0/data/api_index/meta.json`：索引元信息（版本/统计/构建时间）。
+- `stage0/data/api_index/.gitkeep`：保留空目录用占位文件。
+- `stage0/data/prompt_seeds/prompt_seeds.jsonl`：Prompt 种子库（JSONL）。
+- `stage0/data/prompt_seeds/.gitkeep`：保留空目录用占位文件。
+- `stage0/data/reports/prompt_seeds_report.json`：种子库统计摘要。
+- `stage0/data/reports/prompt_coverage.csv`：模块/难度覆盖率表。
+- `stage0/data/reports/.gitkeep`：保留空目录用占位文件。
+- `stage0/data/.DS_Store`：macOS 目录元数据（可忽略/可删除）。
+
+### scripts/（离线脚本）
+
+- `stage0/scripts/README.md`：脚本清单与用途概览。
+- `stage0/scripts/build_api_index.js`：从 `phaser.d.ts` 构建 API 索引。
+- `stage0/scripts/query_api.py`：对 API 索引做检索（BM25）。
+- `stage0/scripts/build_prompt_seeds.py`：生成 Prompt 种子与覆盖率报告。
+- `stage0/scripts/validate_sample.py`：调用 validator 的单样本验证封装。
+
+### validator/（代码验证器）
+
+- `stage0/validator/README.md`：validator 使用说明。
+- `stage0/validator/package.json`：validator 依赖与脚本。
+- `stage0/validator/package-lock.json`：锁定 validator 依赖版本。
+- `stage0/validator/eslint.config.js`：ESLint 配置（安全/错误规则）。
+- `stage0/validator/src/cli.js`：验证器入口，串联 AST/ESLint/API/Runtime。
+- `stage0/validator/src/ast_check.js`：AST 解析、结构信号与 API 候选提取。
+- `stage0/validator/src/eslint_check.js`：ESLint lintText 封装。
+- `stage0/validator/src/api_index.js`：加载 API 索引 `symbol_id` 集合。
+- `stage0/validator/src/run_headless.js`：子进程运行 runtime（可选）。
+- `stage0/validator/src/runtime_child.js`：vm 沙箱 + DOM/canvas stub + Phaser.HEADLESS。
+- `stage0/validator/node_modules/`：安装后的第三方依赖（自动生成）。
+
+---
+
+## 快速开始（端到端最小链路）
+
+> 以下命令默认在 `stage0/` 目录执行。
 
 ### 1) 安装 Phaser（拿到 `phaser.d.ts`）
-
-如果 `node_modules/phaser/types/phaser.d.ts` 不存在：
 
 ```bash
 npm i
 ```
 
-### 2) 构建 API 索引
+### 2) 构建 API 索引（JSONL）
 
 ```bash
 node scripts/build_api_index.js \
   --dts node_modules/phaser/types/phaser.d.ts \
   --out data/api_index/phaser_api.jsonl \
   --meta data/api_index/meta.json \
-  --phaser-version <LOCKED_VERSION>
+  --phaser-version 3.90.0
 ```
-
-> `LOCKED_VERSION` 建议与当前安装的 Phaser 版本一致，可用 `node -p "require('phaser/package.json').version"` 查看。
 
 ### 3) 生成 Prompt 种子库（默认 2000）
 
 ```bash
-python scripts/build_prompt_seeds.py
+python scripts/build_prompt_seeds.py \
+  --count 2000 \
+  --seed 42 \
+  --out data/prompt_seeds/prompt_seeds.jsonl \
+  --report-json data/reports/prompt_seeds_report.json \
+  --coverage-csv data/reports/prompt_coverage.csv
 ```
 
-### 4) 安装并运行 validator（建议先跳过运行时）
+### 4) 安装 validator 依赖
 
 ```bash
 cd validator
 npm i
-node src/cli.js \
-  --code-file ../test_code.js \
-  --api-index ../data/api_index/phaser_api.jsonl \
+cd ..
+```
+
+### 5) 验证单样本（静态为主）
+
+```bash
+node validator/src/cli.js \
+  --code-file test_code.js \
+  --api-index data/api_index/phaser_api.jsonl \
   --skip-runtime
 ```
 
-或用 Python 包一层（便于集成到后续管线）：
+或使用 Python 包装（pretty 输出）：
 
 ```bash
 python scripts/validate_sample.py --code-file test_code.js --skip-runtime
@@ -120,20 +163,26 @@ python scripts/validate_sample.py --code-file test_code.js --skip-runtime
 
 ---
 
-## 与后续阶段的关系
+## 产物一览（可复现离线数据）
 
-stage1/（SFT 冷启动）会直接消费本阶段产物：
-
-- Prompt 种子库：`data/prompt_seeds/prompt_seeds.jsonl`
-- API 索引：`data/api_index/phaser_api.jsonl`
-- 验证器：`validator/src/cli.js`
-
-因此 stage0 最重要的工程目标是：**产物稳定、schema 固定、可重复构建**。
+- `data/api_index/phaser_api.jsonl`：Phaser API 索引（JSONL）
+- `data/api_index/meta.json`：索引元信息（版本/统计/时间）
+- `data/prompt_seeds/prompt_seeds.jsonl`：Prompt 种子库
+- `data/reports/prompt_seeds_report.json`：种子库统计摘要
+- `data/reports/prompt_coverage.csv`：模块/难度覆盖率表
 
 ---
 
-## 进一步阅读
+## 注意事项
 
-- 实现细节与数据格式：`DETAILS.md`
-- scripts 概览：`scripts/README.md`
-- validator 概览：`validator/README.md`
+- **版本一致性**：建议让 `stage0/package.json` 与 `stage0/validator/package.json` 的 Phaser 版本尽量一致，避免“索引里有/运行时没有”的噪声。  
+- **运行时可选**：HEADLESS 运行时依赖 `jsdom/canvas`（已在 `validator/` 的 `optionalDependencies` 中），可按需安装。
+
+---
+
+## 相关文档入口
+
+- `stage0/DETAILS.md`：详细设计与数据格式  
+- `stage0/FLOW.md`：流程与文件流向  
+- `stage0/scripts/README.md`：脚本清单  
+- `stage0/validator/README.md`：validator 使用说明

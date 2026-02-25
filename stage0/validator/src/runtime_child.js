@@ -1,3 +1,4 @@
+// 子进程运行时：注入 DOM/canvas stub 并沙箱执行 Phaser 代码。
 /* eslint-disable no-console */
 
 const fs = require("fs");
@@ -461,4 +462,3 @@ main().catch((e) => {
   };
   process.stdout.write(JSON.stringify(result));
 });
-

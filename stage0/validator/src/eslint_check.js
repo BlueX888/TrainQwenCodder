@@ -1,3 +1,4 @@
+// 运行 ESLint 规则，对生成代码做轻量安全/错误检查。
 const path = require("path");
 
 function requireOptional(name) {

@@ -1,197 +1,273 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+Stage2 公共工具函数模块
 
-from __future__ import annotations
+提供 JSONL 读写、路径处理、日志配置、缓存等通用功能。
+模式与 stage1/scripts/common.py 一致，路径改为 stage2。
+"""
 
-import hashlib
 import json
-import re
-from dataclasses import dataclass
+import os
+import hashlib
+import logging
+import threading
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Union
+from datetime import datetime
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+def get_logger(name: str) -> logging.Logger:
+    """获取命名的 logger"""
+    return logging.getLogger(name)
 
 
-def iter_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as f:
-        for line_no, line in enumerate(f, 1):
-            s = line.strip()
-            if not s:
+# ============ 路径工具 ============
+
+def get_project_root() -> Path:
+    """获取项目根目录"""
+    return Path(__file__).parent.parent.parent
+
+
+def get_stage2_root() -> Path:
+    """获取 stage2 根目录"""
+    return Path(__file__).parent.parent
+
+
+def ensure_dir(path: Union[str, Path]) -> Path:
+    """确保目录存在，如果不存在则创建"""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_stage0_path(subpath: str) -> Path:
+    """获取 stage0 下的路径"""
+    return get_project_root() / "stage0" / subpath
+
+
+def get_data_path(subpath: str) -> Path:
+    """获取 stage2/data 下的路径"""
+    return get_stage2_root() / "data" / subpath
+
+
+def get_reports_path(filename: str) -> Path:
+    """获取报告文件路径"""
+    return ensure_dir(get_data_path("grpo/reports")) / filename
+
+
+# ============ JSONL 读写 ============
+
+def read_jsonl(path: Union[str, Path]) -> List[dict]:
+    """读取 JSONL 文件为列表"""
+    path = Path(path)
+    if not path.exists():
+        return []
+
+    items = []
+    with open(path, 'r', encoding='utf-8') as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
                 continue
             try:
-                obj = json.loads(s)
+                items.append(json.loads(line))
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSONL at {path}:{line_no}: {e}") from e
-            if not isinstance(obj, dict):
-                raise ValueError(f"Expected object at {path}:{line_no}, got {type(obj)}")
-            yield obj
+                logging.warning(f"JSON decode error at line {line_num} in {path}: {e}")
+    return items
 
 
-def write_jsonl(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+def iter_jsonl(path: Union[str, Path]) -> Iterator[dict]:
+    """流式迭代 JSONL 文件"""
+    path = Path(path)
+    if not path.exists():
+        return
+
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
 
-def append_jsonl(path: Path, row: Dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+def write_jsonl(path: Union[str, Path], items: List[dict], mode: str = 'w') -> int:
+    """写入 JSONL 文件"""
+    path = Path(path)
+    ensure_dir(path.parent)
+
+    with open(path, mode, encoding='utf-8') as f:
+        for item in items:
+            f.write(json.dumps(item, ensure_ascii=False) + '\n')
+
+    return len(items)
 
 
-def sha256_text(s: str) -> str:
-    return hashlib.sha256(s.encode("utf-8", errors="ignore")).hexdigest()
+def append_jsonl(path: Union[str, Path], item: dict) -> None:
+    """追加单条记录到 JSONL 文件"""
+    path = Path(path)
+    ensure_dir(path.parent)
+
+    with open(path, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
 
-_RE_FENCE = re.compile(r"^```(?:\w+)?\s*$")
+def read_json(path: Union[str, Path]) -> dict:
+    """读取 JSON 文件"""
+    path = Path(path)
+    if not path.exists():
+        return {}
+
+    with open(path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
-def strip_markdown_fences(code: str) -> str:
-    lines = (code or "").splitlines()
-    out: List[str] = []
-    for ln in lines:
-        if _RE_FENCE.match(ln.strip()):
-            continue
-        out.append(ln)
-    return "\n".join(out).strip()
+def write_json(path: Union[str, Path], data: Any, indent: int = 2) -> None:
+    """写入 JSON 文件"""
+    path = Path(path)
+    ensure_dir(path.parent)
+
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=indent)
 
 
-@dataclass
-class Extracted:
-    plan_raw: str
-    code_raw: str
-    text: str
+# ============ 哈希与缓存 ============
+
+def compute_hash(content: str) -> str:
+    """计算内容的 SHA256 哈希值"""
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
-_RE_PLAN_BLOCK = re.compile(r"\[PLAN\](.*?)\[/PLAN\]", flags=re.IGNORECASE | re.DOTALL)
+def compute_short_hash(content: str, length: int = 8) -> str:
+    """计算短哈希值"""
+    return compute_hash(content)[:length]
 
 
-def _normalize_text(text: str) -> str:
-    return (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-
-
-def _extract_code_only(text: str) -> str:
-    s = _normalize_text(text)
-    if not s:
-        return ""
-    lower = s.lower()
-
-    code_idx = lower.find("code:")
-    if code_idx != -1:
-        code_part = s[code_idx + len("code:") :].strip()
-        return strip_markdown_fences(code_part)
-
-    fence_start = lower.find("```")
-    if fence_start != -1:
-        fence_end = lower.find("```", fence_start + 3)
-        if fence_end != -1:
-            code_block = s[fence_start : fence_end + 3]
-            return strip_markdown_fences(code_block)
-
-    return strip_markdown_fences(s)
-
-
-def extract_plan_code(text: str) -> Extracted:
+class JsonlCache:
     """
-    Extract plan+code from model output.
+    基于 JSONL 的简单缓存
 
-    Supported formats:
-    - [PLAN] ... [/PLAN] + ```javascript ... ```
-    - plan: ... code: ...
-    - fallback: first fenced code block
-    - last resort: treat whole output as code
+    用于缓存 validator 结果等，避免重复计算
     """
 
-    s = _normalize_text(text)
-    if not s:
-        return Extracted(plan_raw="", code_raw="", text="")
+    def __init__(self, cache_path: Union[str, Path], key_field: str = 'key'):
+        self.cache_path = Path(cache_path)
+        self.key_field = key_field
+        self._cache: Dict[str, dict] = {}
+        self._lock = threading.Lock()
+        self._load()
 
-    m = _RE_PLAN_BLOCK.search(s)
-    if m:
-        plan_raw = (m.group(1) or "").strip()
-        rest = (s[: m.start()] + "\n" + s[m.end() :]).strip()
-        code_raw = _extract_code_only(rest)
-        return Extracted(plan_raw=plan_raw, code_raw=code_raw, text=s)
+    def _load(self) -> None:
+        """从文件加载缓存"""
+        if self.cache_path.exists():
+            for item in iter_jsonl(self.cache_path):
+                key = item.get(self.key_field)
+                if key:
+                    self._cache[key] = item
 
-    lower = s.lower()
-    plan_idx = lower.find("plan:")
-    code_idx = lower.find("code:")
-    if plan_idx != -1 and code_idx != -1 and plan_idx < code_idx:
-        plan_part = s[plan_idx + len("plan:") : code_idx].strip()
-        code_part = s[code_idx + len("code:") :].strip()
-        return Extracted(plan_raw=plan_part, code_raw=strip_markdown_fences(code_part), text=s)
+    def get(self, key: str) -> Optional[dict]:
+        """获取缓存项"""
+        return self._cache.get(key)
 
-    return Extracted(plan_raw="", code_raw=_extract_code_only(s), text=s)
+    def set(self, key: str, value: dict) -> None:
+        """设置缓存项（线程安全）"""
+        with self._lock:
+            value[self.key_field] = key
+            self._cache[key] = value
+            append_jsonl(self.cache_path, value)
 
+    def has(self, key: str) -> bool:
+        """检查是否存在缓存"""
+        return key in self._cache
 
-def parse_plan_json(plan_raw: str) -> Tuple[Optional[Dict[str, Any]], str]:
-    raw = (plan_raw or "").strip()
-    if not raw:
-        return None, ""
-    try:
-        obj = json.loads(raw)
-    except json.JSONDecodeError:
-        return None, raw
-    if isinstance(obj, dict):
-        return obj, raw
-    return None, raw
+    def __len__(self) -> int:
+        return len(self._cache)
 
-
-_RE_REQ = re.compile(r"^\s*(?:REQ|需求)\s*:\s*(.+?)\s*$", flags=re.IGNORECASE)
-_RE_API = re.compile(r"^\s*(?:API|APIS|接口)\s*:\s*(.+?)\s*$", flags=re.IGNORECASE)
-_RE_STEPS = re.compile(r"^\s*(?:STEPS|步骤)\s*:?\s*$", flags=re.IGNORECASE)
-_RE_STEP_LINE = re.compile(r"^\s*(?:\d+\.)\s*(.+?)\s*$")
+    def __bool__(self) -> bool:
+        return True
 
 
-def parse_plan_text(plan_raw: str) -> Optional[Dict[str, Any]]:
-    raw = (plan_raw or "").strip()
-    if not raw:
-        return None
+# ============ 文本处理 ============
 
-    req: str = ""
-    apis: List[str] = []
-    steps: List[str] = []
-    in_steps = False
+def normalize_code(code: str) -> str:
+    """规范化代码用于相似度比较"""
+    import re
 
-    for ln in raw.splitlines():
-        s = ln.strip()
-        if not s:
-            continue
+    code = re.sub(r'//.*$', '', code, flags=re.MULTILINE)
+    code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+    code = re.sub(r'\s+', ' ', code)
+    code = code.strip()
 
-        m = _RE_REQ.match(s)
-        if m:
-            req = m.group(1).strip()
-            in_steps = False
-            continue
+    return code
 
-        m = _RE_API.match(s)
-        if m:
-            in_steps = False
-            api_s = m.group(1)
-            parts = re.split(r"[,，、;；]\s*", api_s)
-            apis = [p.strip() for p in parts if p and p.strip()]
-            continue
 
-        if _RE_STEPS.match(s):
-            in_steps = True
-            continue
+def count_code_lines(code: str) -> dict:
+    """
+    统计代码行数
 
-        if in_steps:
-            sm = _RE_STEP_LINE.match(s)
-            if sm:
-                steps.append(sm.group(1).strip())
-            else:
-                # allow bullet-like continuation lines
-                if s.startswith("-") or s.startswith("*"):
-                    steps.append(s[1:].strip())
+    Returns:
+        {'total': 总行数, 'code': 代码行数, 'comment': 注释行数, 'blank': 空行数}
+    """
+    lines = code.split('\n')
+    total = len(lines)
+    blank = sum(1 for l in lines if not l.strip())
 
-    if not req and not apis and not steps:
-        return None
+    comment = 0
+    in_block_comment = False
+    for line in lines:
+        line = line.strip()
+        if in_block_comment:
+            comment += 1
+            if '*/' in line:
+                in_block_comment = False
+        elif line.startswith('//'):
+            comment += 1
+        elif line.startswith('/*'):
+            comment += 1
+            if '*/' not in line:
+                in_block_comment = True
+
+    code_lines = total - blank - comment
 
     return {
-        "requirements": [req] if req else [],
-        "apis": apis,
-        "steps": steps,
-        "notes": "",
+        'total': total,
+        'code': max(0, code_lines),
+        'comment': comment,
+        'blank': blank
     }
 
+
+# ============ 报告工具 ============
+
+def generate_report_summary(
+    name: str,
+    total: int,
+    passed: int,
+    details: Optional[dict] = None
+) -> dict:
+    """生成标准格式的报告摘要"""
+    return {
+        'name': name,
+        'timestamp': datetime.now().isoformat(),
+        'total': total,
+        'passed': passed,
+        'failed': total - passed,
+        'pass_rate': round(passed / total * 100, 2) if total > 0 else 0,
+        'details': details or {}
+    }
+
+
+def print_progress(current: int, total: int, prefix: str = '', suffix: str = '') -> None:
+    """打印进度条"""
+    percent = current / total * 100 if total > 0 else 0
+    bar_length = 40
+    filled = int(bar_length * current / total) if total > 0 else 0
+    bar = '=' * filled + '-' * (bar_length - filled)
+    print(f'\r{prefix} [{bar}] {percent:.1f}% ({current}/{total}) {suffix}', end='', flush=True)
+    if current >= total:
+        print()

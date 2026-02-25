@@ -1,3 +1,4 @@
+// validator 的 ESLint 规则配置（聚焦安全与明显错误）。
 /**
  * Minimal ESLint flat config for validating generated Phaser code.
  * Keep it intentionally lightweight: avoid style wars, focus on safety/obvious bugs.
@@ -49,4 +50,3 @@ module.exports = [
     },
   },
 ];
-
